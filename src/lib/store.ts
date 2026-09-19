@@ -4,6 +4,11 @@ import { persist } from "zustand/middleware";
 export type Recurrence = "Once" | "Repetitive";
 export type TrackingType = "Simple" | "Time" | "Count";
 
+export interface HistoryEntry {
+  date: string;
+  amountLogged: number;
+}
+
 export interface GlobalTask {
   id: string;
   title: string;
@@ -11,6 +16,7 @@ export interface GlobalTask {
   baseType: TrackingType;
   expiresAt?: string; // ISO date, only for "Once"
   isGloballyCompleted: boolean;
+  history: HistoryEntry[];
 }
 
 export interface DailyTask {
@@ -34,11 +40,11 @@ interface State {
   globalTasks: GlobalTask[];
   dailyTasks: DailyTask[];
   lastResetDate: string;
-  addGlobalTask: (t: Omit<GlobalTask, "id" | "isGloballyCompleted">) => void;
+  addGlobalTask: (t: Omit<GlobalTask, "id" | "isGloballyCompleted" | "history">) => void;
   removeGlobalTask: (id: string) => void;
   completeGlobalTask: (id: string) => void;
   addToMyDay: (globalTaskId: string, trackingType: TrackingType, targetValue: number) => void;
-  updateDailyValue: (id: string, value: number) => void;
+  logDailyProgress: (id: string, amount: number) => void;
   toggleDailyDone: (id: string) => void;
   removeDailyTask: (id: string) => void;
   checkReset: () => void;
@@ -52,6 +58,7 @@ const seedGlobal: GlobalTask[] = [
     baseType: "Time",
     expiresAt: new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10),
     isGloballyCompleted: false,
+    history: [],
   },
   {
     id: uid(),
@@ -60,6 +67,7 @@ const seedGlobal: GlobalTask[] = [
     baseType: "Simple",
     expiresAt: new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10),
     isGloballyCompleted: false,
+    history: [],
   },
   {
     id: uid(),
@@ -67,6 +75,7 @@ const seedGlobal: GlobalTask[] = [
     recurrence: "Repetitive",
     baseType: "Time",
     isGloballyCompleted: false,
+    history: [],
   },
   {
     id: uid(),
@@ -74,6 +83,7 @@ const seedGlobal: GlobalTask[] = [
     recurrence: "Repetitive",
     baseType: "Count",
     isGloballyCompleted: false,
+    history: [],
   },
   {
     id: uid(),
@@ -81,6 +91,7 @@ const seedGlobal: GlobalTask[] = [
     recurrence: "Repetitive",
     baseType: "Simple",
     isGloballyCompleted: false,
+    history: [],
   },
 ];
 
@@ -93,7 +104,10 @@ export const useStore = create<State>()(
 
       addGlobalTask: (t) =>
         set((s) => ({
-          globalTasks: [...s.globalTasks, { ...t, id: uid(), isGloballyCompleted: false }],
+          globalTasks: [
+            ...s.globalTasks,
+            { ...t, id: uid(), isGloballyCompleted: false, history: [] },
+          ],
         })),
 
       removeGlobalTask: (id) =>
@@ -124,25 +138,52 @@ export const useStore = create<State>()(
           ],
         })),
 
-      updateDailyValue: (id, value) =>
-        set((s) => ({
-          dailyTasks: s.dailyTasks.map((d) => {
-            if (d.id !== id) return d;
-            const v = Math.max(0, Math.min(value, d.targetValue));
-            return { ...d, currentValue: v, status: v >= d.targetValue ? "Done" : "Doing" };
-          }),
-        })),
+      logDailyProgress: (id, amount) => {
+        if (!Number.isFinite(amount) || amount <= 0) return;
+        set((s) => {
+          const dailyTask = s.dailyTasks.find((d) => d.id === id);
+          if (!dailyTask || dailyTask.trackingType === "Simple") return s;
+          const value = Math.min(dailyTask.currentValue + amount, dailyTask.targetValue);
+          return {
+            dailyTasks: s.dailyTasks.map((d) =>
+              d.id === id
+                ? { ...d, currentValue: value, status: value >= d.targetValue ? "Done" : "Doing" }
+                : d,
+            ),
+            globalTasks: s.globalTasks.map((g) =>
+              g.id === dailyTask.globalTaskId
+                ? {
+                    ...g,
+                    history: [...g.history, { date: dayKey(), amountLogged: amount }],
+                  }
+                : g,
+            ),
+          };
+        });
+      },
 
       toggleDailyDone: (id) =>
         set((s) => ({
           dailyTasks: s.dailyTasks.map((d) => {
-            if (d.id !== id) return d;
+            if (d.id !== id || d.trackingType !== "Simple") return d;
             const done = d.status === "Done";
             return {
               ...d,
               status: done ? "Doing" : "Done",
               currentValue: done ? 0 : d.targetValue,
             };
+          }),
+          globalTasks: s.globalTasks.map((g) => {
+            const dailyTask = s.dailyTasks.find((d) => d.id === id);
+            if (!dailyTask || dailyTask.trackingType !== "Simple" || g.id !== dailyTask.globalTaskId) {
+              return g;
+            }
+            if (dailyTask.status === "Done") {
+              const index = g.history.findLastIndex((entry) => entry.date === dayKey());
+              if (index < 0) return g;
+              return { ...g, history: g.history.filter((_, i) => i !== index) };
+            }
+            return { ...g, history: [...g.history, { date: dayKey(), amountLogged: 1 }] };
           }),
         })),
 
@@ -156,7 +197,20 @@ export const useStore = create<State>()(
         }
       },
     }),
-    { name: "tweek-todo-v1" },
+    {
+      name: "tweek-todo-v1",
+      version: 2,
+      migrate: (persisted) => {
+        const saved = persisted as Partial<State> | undefined;
+        return {
+          ...saved,
+          globalTasks: (saved?.globalTasks ?? seedGlobal).map((task) => ({
+            ...task,
+            history: Array.isArray(task.history) ? task.history : [],
+          })),
+        } as State;
+      },
+    },
   ),
 );
 

@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Minus, Plus, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
 import { formatMinutes, useStore, type DailyTask } from "@/lib/store";
+import { useState } from "react";
 
 export const Route = createFileRoute("/my-day")({
   head: () => ({
@@ -27,12 +30,30 @@ export const Route = createFileRoute("/my-day")({
 });
 
 function DailyRow({ task }: { task: DailyTask }) {
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [count, setCount] = useState("");
   const title = useStore(
     (s) => s.globalTasks.find((g) => g.id === task.globalTaskId)?.title ?? "Task",
   );
-  const { updateDailyValue, toggleDailyDone, removeDailyTask } = useStore();
+  const { logDailyProgress, toggleDailyDone, removeDailyTask } = useStore();
   const pct = Math.round((task.currentValue / task.targetValue) * 100);
   const done = task.status === "Done";
+
+  const logTime = () => {
+    const amount = Math.max(0, Number(hours) || 0) * 60 + Math.max(0, Number(minutes) || 0);
+    if (amount <= 0) return;
+    logDailyProgress(task.id, amount);
+    setHours("");
+    setMinutes("");
+  };
+
+  const logCount = () => {
+    const amount = Math.max(0, Number(count) || 0);
+    if (amount <= 0) return;
+    logDailyProgress(task.id, amount);
+    setCount("");
+  };
 
   return (
     <motion.li
@@ -55,33 +76,24 @@ function DailyRow({ task }: { task: DailyTask }) {
             {done && <Check className="size-4" strokeWidth={2.5} />}
           </button>
         ) : (
-          <button
-            onClick={() => toggleDailyDone(task.id)}
-            aria-label="Toggle done"
-            className={`grid size-7 shrink-0 place-items-center rounded-full border text-[10px] tabular-nums transition-all ${
+          <div
+            aria-label={`${pct}% complete`}
+            className={`grid size-7 shrink-0 place-items-center rounded-full border text-[10px] tabular-nums ${
               done ? "border-foreground bg-foreground text-background" : "border-border"
             }`}
           >
             {done ? <Check className="size-3.5" strokeWidth={2.5} /> : `${pct}`}
-          </button>
+          </div>
         )}
 
         <p className={`flex-1 truncate text-[15px] ${done ? "text-muted-foreground line-through" : ""}`}>
           {title}
         </p>
 
-        {task.trackingType === "Count" && !done && (
-          <div className="flex items-center gap-3">
-            <button onClick={() => updateDailyValue(task.id, task.currentValue - 1)}>
-              <Minus className="size-4 text-muted-foreground" />
-            </button>
-            <span className="min-w-12 text-center text-sm tabular-nums">
-              {task.currentValue}/{task.targetValue}
-            </span>
-            <button onClick={() => updateDailyValue(task.id, task.currentValue + 1)}>
-              <Plus className="size-4 text-muted-foreground" />
-            </button>
-          </div>
+        {task.trackingType === "Count" && (
+          <span className="text-sm tabular-nums text-muted-foreground">
+            {task.currentValue}/{task.targetValue}
+          </span>
         )}
 
         <button
@@ -93,7 +105,7 @@ function DailyRow({ task }: { task: DailyTask }) {
         </button>
       </div>
 
-      {task.trackingType === "Time" && !done && (
+      {task.trackingType === "Time" && (
         <div className="mt-3 pl-10">
           <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
             <motion.div
@@ -102,22 +114,23 @@ function DailyRow({ task }: { task: DailyTask }) {
               transition={{ type: "spring", damping: 24, stiffness: 220 }}
             />
           </div>
-          <div className="mt-2 flex items-center justify-between">
+          <div className="mt-2 flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground tabular-nums">
               {formatMinutes(task.currentValue)} / {formatMinutes(task.targetValue)}
             </span>
-            <div className="flex gap-1.5">
-              {[5, 15, 30].map((m) => (
-                <button
-                  key={m}
-                  onClick={() => updateDailyValue(task.id, task.currentValue + m)}
-                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
-                >
-                  +{m}m
-                </button>
-              ))}
-            </div>
+            {!done && <div className="flex items-center gap-1.5">
+              <Input aria-label="Hours to log" inputMode="numeric" min="0" type="number" placeholder="HH" value={hours} onChange={(e) => setHours(e.target.value)} className="h-8 w-14 px-2 text-center" />
+              <Input aria-label="Minutes to log" inputMode="numeric" min="0" max="59" type="number" placeholder="MM" value={minutes} onChange={(e) => setMinutes(e.target.value)} className="h-8 w-14 px-2 text-center" />
+              <Button size="sm" onClick={logTime}>Log time</Button>
+            </div>}
           </div>
+        </div>
+      )}
+
+      {task.trackingType === "Count" && !done && (
+        <div className="mt-3 flex items-center gap-2 pl-10">
+          <Input aria-label="Count to log" inputMode="numeric" min="1" type="number" placeholder="N" value={count} onChange={(e) => setCount(e.target.value)} onKeyDown={(e) => e.key === "Enter" && logCount()} className="h-8 max-w-24" />
+          <Button size="sm" onClick={logCount}>Log count</Button>
         </div>
       )}
     </motion.li>
@@ -138,7 +151,6 @@ function MyDay() {
         <h1 className="text-[28px] font-medium tracking-tight">My Day</h1>
         <p className="mt-1 text-xs text-muted-foreground">
           {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-          {" · resets at 4 AM"}
         </p>
       </header>
 
