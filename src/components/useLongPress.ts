@@ -2,12 +2,15 @@ import { useRef, useState } from "react";
 
 export function useLongPress(onLongPress: () => void, ms = 450) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
   const [pressing, setPressing] = useState(false);
 
   const start = () => {
+    longPressFired.current = false;
     setPressing(true);
     timer.current = setTimeout(() => {
       setPressing(false);
+      longPressFired.current = true;
       onLongPress();
     }, ms);
   };
@@ -19,6 +22,11 @@ export function useLongPress(onLongPress: () => void, ms = 450) {
 
   return {
     pressing,
+    consumeLongPress: () => {
+      const fired = longPressFired.current;
+      longPressFired.current = false;
+      return fired;
+    },
     handlers: {
       onPointerDown: start,
       onPointerUp: cancel,
