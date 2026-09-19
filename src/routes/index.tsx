@@ -1,24 +1,210 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, Plus, X } from "lucide-react";
+import { BottomNav } from "@/components/BottomNav";
+import { AddToDaySheet } from "@/components/AddToDaySheet";
+import { useLongPress } from "@/components/useLongPress";
+import { useDailyReset } from "@/components/useDailyReset";
+import { useStore, type GlobalTask, type Recurrence, type TrackingType } from "@/lib/store";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "All Tasks · Slate" },
+      {
+        name: "description",
+        content: "A calm, minimalist backlog. Hold a task to plan it into your day.",
+      },
+      { property: "og:title", content: "All Tasks · Slate" },
+      {
+        property: "og:description",
+        content: "A calm, minimalist backlog. Hold a task to plan it into your day.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: AllTasks,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function TaskRow({ task, onLongPress }: { task: GlobalTask; onLongPress: () => void }) {
+  const completeGlobalTask = useStore((s) => s.completeGlobalTask);
+  const { pressing, handlers } = useLongPress(onLongPress);
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
+    <motion.li
+      layout
+      {...handlers}
+      animate={{ scale: pressing ? 0.96 : 1, opacity: pressing ? 0.7 : 1 }}
+      transition={{ duration: pressing ? 0.45 : 0.18 }}
+      className="flex select-none items-center justify-between border-b border-border py-4"
     >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+      <div className="min-w-0">
+        <p className="truncate text-[15px]">{task.title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {task.recurrence === "Once"
+            ? `Once · ${task.baseType} · ${task.expiresAt ?? "no date"}`
+            : `Repetitive · ${task.baseType}`}
+        </p>
+      </div>
+      {task.recurrence === "Once" && (
+        <button
+          onClick={() => completeGlobalTask(task.id)}
+          aria-label="Mark completed"
+          className="ml-3 grid size-7 shrink-0 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted"
+        >
+          <Check className="size-3.5" />
+        </button>
+      )}
+    </motion.li>
+  );
+}
+
+function Composer({ onClose }: { onClose: () => void }) {
+  const addGlobalTask = useStore((s) => s.addGlobalTask);
+  const [title, setTitle] = useState("");
+  const [recurrence, setRecurrence] = useState<Recurrence>("Once");
+  const [baseType, setBaseType] = useState<TrackingType>("Simple");
+  const [expiresAt, setExpiresAt] = useState(new Date().toISOString().slice(0, 10));
+
+  const submit = () => {
+    if (!title.trim()) return;
+    addGlobalTask({
+      title: title.trim(),
+      recurrence,
+      baseType,
+      ...(recurrence === "Once" ? { expiresAt } : {}),
+    });
+    onClose();
+  };
+
+  const Chip = ({ on, children, ...p }: React.ComponentProps<"button"> & { on: boolean }) => (
+    <button
+      {...p}
+      className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+        on ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className="mb-4 rounded-2xl border border-border p-4"
+    >
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="Task title"
+          className="w-full bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+        />
+        <button onClick={onClose} aria-label="Close">
+          <X className="size-4 text-muted-foreground" />
+        </button>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {(["Once", "Repetitive"] as const).map((r) => (
+          <Chip key={r} on={recurrence === r} onClick={() => setRecurrence(r)}>
+            {r}
+          </Chip>
+        ))}
+        <span className="mx-1 w-px bg-border" />
+        {(["Simple", "Time", "Count"] as const).map((t) => (
+          <Chip key={t} on={baseType === t} onClick={() => setBaseType(t)}>
+            {t}
+          </Chip>
+        ))}
+      </div>
+      {recurrence === "Once" && (
+        <input
+          type="date"
+          value={expiresAt}
+          onChange={(e) => setExpiresAt(e.target.value)}
+          className="mt-3 bg-transparent text-xs text-muted-foreground outline-none"
+        />
+      )}
+      <button
+        onClick={submit}
+        className="mt-4 w-full rounded-xl bg-foreground py-2.5 text-sm font-medium text-background"
+      >
+        Add task
+      </button>
+    </motion.div>
+  );
+}
+
+function AllTasks() {
+  useDailyReset();
+  const globalTasks = useStore((s) => s.globalTasks);
+  const [selected, setSelected] = useState<GlobalTask | null>(null);
+  const [composing, setComposing] = useState(false);
+
+  const { once, repetitive } = useMemo(() => {
+    const active = globalTasks.filter((t) => !t.isGloballyCompleted);
+    return {
+      once: active
+        .filter((t) => t.recurrence === "Once")
+        .sort((a, b) => (a.expiresAt ?? "9999").localeCompare(b.expiresAt ?? "9999")),
+      repetitive: active.filter((t) => t.recurrence === "Repetitive"),
+    };
+  }, [globalTasks]);
+
+  return (
+    <div className="mx-auto min-h-screen max-w-md px-6 pb-28 pt-12">
+      <header className="mb-8 flex items-end justify-between">
+        <div>
+          <h1 className="text-[28px] font-medium tracking-tight">All Tasks</h1>
+          <p className="mt-1 text-xs text-muted-foreground">Hold a task to plan it for today</p>
+        </div>
+        <button
+          onClick={() => setComposing((v) => !v)}
+          aria-label="New task"
+          className="grid size-9 place-items-center rounded-full border border-border transition-colors hover:bg-muted"
+        >
+          <Plus className="size-4" />
+        </button>
+      </header>
+
+      <AnimatePresence>{composing && <Composer onClose={() => setComposing(false)} />}</AnimatePresence>
+
+      {once.length > 0 && (
+        <section className="mb-8">
+          <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Once</p>
+          <ul>
+            {once.map((t) => (
+              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {repetitive.length > 0 && (
+        <section>
+          <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Repetitive
+          </p>
+          <ul>
+            {repetitive.map((t) => (
+              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {once.length === 0 && repetitive.length === 0 && (
+        <p className="mt-24 text-center text-sm text-muted-foreground">Nothing here yet.</p>
+      )}
+
+      <AddToDaySheet task={selected} onClose={() => setSelected(null)} />
+      <BottomNav />
     </div>
   );
 }
