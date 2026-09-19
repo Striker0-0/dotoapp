@@ -4,10 +4,25 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus, X } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { AddToDaySheet } from "@/components/AddToDaySheet";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useLongPress } from "@/components/useLongPress";
 import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
-import { useStore, type GlobalTask, type Recurrence, type TrackingType } from "@/lib/store";
+import {
+  formatMinutes,
+  useStore,
+  type GlobalTask,
+  type HistoryEntry,
+  type Recurrence,
+  type TrackingType,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,14 +44,29 @@ export const Route = createFileRoute("/")({
   component: AllTasks,
 });
 
-function TaskRow({ task, onLongPress }: { task: GlobalTask; onLongPress: () => void }) {
+function TaskRow({
+  task,
+  onLongPress,
+  onOpenStats,
+}: {
+  task: GlobalTask;
+  onLongPress: () => void;
+  onOpenStats: () => void;
+}) {
   const completeGlobalTask = useStore((s) => s.completeGlobalTask);
-  const { pressing, handlers } = useLongPress(onLongPress);
+  const { pressing, handlers, consumeLongPress } = useLongPress(onLongPress);
+  const loggedTime = task.baseType === "Time"
+    ? task.history.reduce((total, entry) => total + entry.amountLogged, 0)
+    : 0;
 
   return (
     <motion.li
       layout
       {...handlers}
+      onClick={() => {
+        if (consumeLongPress()) return;
+        if (task.recurrence === "Repetitive") onOpenStats();
+      }}
       animate={{ scale: pressing ? 0.96 : 1, opacity: pressing ? 0.7 : 1 }}
       transition={{ duration: pressing ? 0.45 : 0.18 }}
       className="flex select-none items-center justify-between border-b border-border py-4"
@@ -45,20 +75,88 @@ function TaskRow({ task, onLongPress }: { task: GlobalTask; onLongPress: () => v
         <p className="truncate text-[15px]">{task.title}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {task.recurrence === "Once"
-            ? `Once · ${task.baseType} · ${task.expiresAt ?? "no date"}`
+            ? `${task.baseType} · ${task.expiresAt ?? "no date"}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} logged` : ""}`
             : `Repetitive · ${task.baseType}`}
         </p>
       </div>
       {task.recurrence === "Once" && (
-        <button
-          onClick={() => completeGlobalTask(task.id)}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(event) => {
+              event.stopPropagation();
+              completeGlobalTask(task.id);
+            }}
           aria-label="Mark completed"
-          className="ml-3 grid size-7 shrink-0 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted"
+            className="ml-3 size-7 shrink-0 rounded-full border border-border text-muted-foreground"
         >
           <Check className="size-3.5" />
-        </button>
+          </Button>
       )}
     </motion.li>
+  );
+}
+
+type StatsPeriod = "Total" | "Yearly" | "Monthly" | "Weekly";
+
+function localDateParts(value: string) {
+  const [year = 0, month = 0, day = 0] = value.split("-").map(Number);
+  return { year, month, day, date: new Date(year, month - 1, day) };
+}
+
+function entriesForPeriod(history: HistoryEntry[], period: StatsPeriod) {
+  if (period === "Total") return history;
+  const now = new Date();
+  if (period === "Yearly") return history.filter((entry) => localDateParts(entry.date).year === now.getFullYear());
+  if (period === "Monthly") {
+    return history.filter((entry) => {
+      const { year, month } = localDateParts(entry.date);
+      return year === now.getFullYear() && month === now.getMonth() + 1;
+    });
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return history.filter((entry) => {
+    const date = localDateParts(entry.date).date;
+    return date >= start && date < end;
+  });
+}
+
+function TaskStats({ task, onClose }: { task: GlobalTask | null; onClose: () => void }) {
+  const periods: StatsPeriod[] = ["Total", "Yearly", "Monthly", "Weekly"];
+  return (
+    <Dialog open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm rounded-lg border-border bg-card">
+        <DialogHeader>
+          <DialogTitle>{task?.title}</DialogTitle>
+          <DialogDescription>Progress history</DialogDescription>
+        </DialogHeader>
+        {task && (
+          <div className="divide-y divide-border">
+            {periods.map((period) => {
+              const entries = entriesForPeriod(task.history, period);
+              const daysDone = new Set(entries.map((entry) => entry.date)).size;
+              const amount = entries.reduce((total, entry) => total + entry.amountLogged, 0);
+              return (
+                <div key={period} className="flex items-center justify-between py-4">
+                  <span className="text-sm text-muted-foreground">{period}</span>
+                  <div className="text-right">
+                    <p className="text-sm font-medium tabular-nums">{daysDone} {daysDone === 1 ? "day" : "days"} done</p>
+                    {task.baseType !== "Simple" && (
+                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                        {task.baseType === "Time" ? formatMinutes(amount) : `${amount} total`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -147,6 +245,7 @@ function AllTasks() {
   const hydrated = useHydrated();
   const globalTasks = useStore((s) => s.globalTasks);
   const [selected, setSelected] = useState<GlobalTask | null>(null);
+  const [statsTask, setStatsTask] = useState<GlobalTask | null>(null);
   const [composing, setComposing] = useState(false);
 
   const { once, repetitive } = useMemo(() => {
@@ -164,7 +263,6 @@ function AllTasks() {
       <header className="mb-8 flex items-end justify-between">
         <div>
           <h1 className="text-[28px] font-medium tracking-tight">All Tasks</h1>
-          <p className="mt-1 text-xs text-muted-foreground">Hold a task to plan it for today</p>
         </div>
         <button
           onClick={() => setComposing((v) => !v)}
@@ -182,7 +280,7 @@ function AllTasks() {
           <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Once</p>
           <ul>
             {once.map((t) => (
-              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} />
+              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} onOpenStats={() => setStatsTask(t)} />
             ))}
           </ul>
         </section>
@@ -195,7 +293,7 @@ function AllTasks() {
           </p>
           <ul>
             {repetitive.map((t) => (
-              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} />
+              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} onOpenStats={() => setStatsTask(t)} />
             ))}
           </ul>
         </section>
@@ -206,6 +304,7 @@ function AllTasks() {
       )}
 
       <AddToDaySheet task={selected} onClose={() => setSelected(null)} />
+      <TaskStats task={statsTask} onClose={() => setStatsTask(null)} />
       <BottomNav />
     </div>
   );

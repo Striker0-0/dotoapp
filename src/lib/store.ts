@@ -179,7 +179,7 @@ export const useStore = create<State>()(
               return g;
             }
             if (dailyTask.status === "Done") {
-              const index = g.history.findLastIndex((entry) => entry.date === dayKey());
+              const index = g.history.map((entry) => entry.date).lastIndexOf(dayKey());
               if (index < 0) return g;
               return { ...g, history: g.history.filter((_, i) => i !== index) };
             }
