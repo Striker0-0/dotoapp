@@ -31,7 +31,8 @@ export function WheelColumn({
       if (!el) return;
       const idx = Math.max(0, Math.min(values.length - 1, Math.round(el.scrollTop / ITEM_H)));
       el.scrollTo({ top: idx * ITEM_H, behavior: "smooth" });
-      if (values[idx] !== value) onChange(values[idx]);
+      const next = values[idx];
+      if (next !== undefined && next !== value) onChange(next);
     }, 90);
   };
 
