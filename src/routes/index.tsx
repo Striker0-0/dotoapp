@@ -194,7 +194,7 @@ function Composer({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="mb-4 rounded-2xl border border-border p-4"
+      className="mb-4 rounded-lg border border-border bg-card p-4"
     >
       <div className="flex items-center gap-2">
         <input

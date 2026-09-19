@@ -49,7 +49,7 @@ function DailyRow({ task }: { task: DailyTask }) {
   };
 
   const logCount = () => {
-    const amount = Math.max(0, Number(count) || 0);
+    const amount = Math.floor(Math.max(0, Number(count) || 0));
     if (amount <= 0) return;
     logDailyProgress(task.id, amount);
     setCount("");
@@ -114,14 +114,14 @@ function DailyRow({ task }: { task: DailyTask }) {
               transition={{ type: "spring", damping: 24, stiffness: 220 }}
             />
           </div>
-          <div className="mt-2 flex items-center justify-between gap-3">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground tabular-nums">
               {formatMinutes(task.currentValue)} / {formatMinutes(task.targetValue)}
             </span>
-            {!done && <div className="flex items-center gap-1.5">
+            {!done && <div className="flex w-full items-center gap-1.5 sm:w-auto">
               <Input aria-label="Hours to log" inputMode="numeric" min="0" type="number" placeholder="HH" value={hours} onChange={(e) => setHours(e.target.value)} className="h-8 w-14 px-2 text-center" />
               <Input aria-label="Minutes to log" inputMode="numeric" min="0" max="59" type="number" placeholder="MM" value={minutes} onChange={(e) => setMinutes(e.target.value)} className="h-8 w-14 px-2 text-center" />
-              <Button size="sm" onClick={logTime}>Log time</Button>
+              <Button size="sm" onClick={logTime} className="flex-1 sm:flex-none">Log time</Button>
             </div>}
           </div>
         </div>

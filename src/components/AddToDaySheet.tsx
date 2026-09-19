@@ -43,7 +43,7 @@ export function AddToDaySheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl border-t border-border bg-background px-6 pb-8 pt-3"
+            className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl border-t border-border bg-card px-6 pb-8 pt-3"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
