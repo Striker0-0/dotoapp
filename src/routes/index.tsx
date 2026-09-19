@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { AddToDaySheet } from "@/components/AddToDaySheet";
 import { useLongPress } from "@/components/useLongPress";
 import { useDailyReset } from "@/components/useDailyReset";
+import { useHydrated } from "@/components/useHydrated";
 import { useStore, type GlobalTask, type Recurrence, type TrackingType } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
@@ -143,6 +144,7 @@ function Composer({ onClose }: { onClose: () => void }) {
 
 function AllTasks() {
   useDailyReset();
+  const hydrated = useHydrated();
   const globalTasks = useStore((s) => s.globalTasks);
   const [selected, setSelected] = useState<GlobalTask | null>(null);
   const [composing, setComposing] = useState(false);
@@ -175,7 +177,7 @@ function AllTasks() {
 
       <AnimatePresence>{composing && <Composer onClose={() => setComposing(false)} />}</AnimatePresence>
 
-      {once.length > 0 && (
+      {hydrated && once.length > 0 && (
         <section className="mb-8">
           <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Once</p>
           <ul>
@@ -186,7 +188,7 @@ function AllTasks() {
         </section>
       )}
 
-      {repetitive.length > 0 && (
+      {hydrated && repetitive.length > 0 && (
         <section>
           <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             Repetitive
@@ -199,7 +201,7 @@ function AllTasks() {
         </section>
       )}
 
-      {once.length === 0 && repetitive.length === 0 && (
+      {hydrated && once.length === 0 && repetitive.length === 0 && (
         <p className="mt-24 text-center text-sm text-muted-foreground">Nothing here yet.</p>
       )}
 

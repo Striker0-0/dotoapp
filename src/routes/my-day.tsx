@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Minus, Plus, X } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { useDailyReset } from "@/components/useDailyReset";
+import { useHydrated } from "@/components/useHydrated";
 import { formatMinutes, useStore, type DailyTask } from "@/lib/store";
 
 export const Route = createFileRoute("/my-day")({
@@ -125,7 +126,9 @@ function DailyRow({ task }: { task: DailyTask }) {
 
 function MyDay() {
   useDailyReset();
-  const dailyTasks = useStore((s) => s.dailyTasks);
+  const hydrated = useHydrated();
+  const all = useStore((s) => s.dailyTasks);
+  const dailyTasks = hydrated ? all : [];
   const doing = dailyTasks.filter((t) => t.status === "Doing");
   const done = dailyTasks.filter((t) => t.status === "Done");
 
