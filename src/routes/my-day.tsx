@@ -78,7 +78,11 @@ function DailyRow({ task }: { task: DailyTask }) {
     }, 1000);
   };
 
-  useEffect(() => () => timer.current && clearTimeout(timer.current), []);
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
 
   const onTime = (h: string, m: string) => {
     setHours(h);
