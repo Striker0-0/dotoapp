@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Plus, Trash2, X } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { AddToDaySheet } from "@/components/AddToDaySheet";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,9 @@ import { useLongPress } from "@/components/useLongPress";
 import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
 import {
+  aggregatedHistory,
   formatMinutes,
+  recentDayKeys,
   useStore,
   type GlobalTask,
   type HistoryEntry,
@@ -46,18 +49,32 @@ export const Route = createFileRoute("/")({
 
 function TaskRow({
   task,
+  isParent,
+  nested,
   onLongPress,
   onOpenStats,
 }: {
   task: GlobalTask;
+  isParent: boolean;
+  nested?: boolean;
   onLongPress: () => void;
   onOpenStats: () => void;
 }) {
   const completeGlobalTask = useStore((s) => s.completeGlobalTask);
+  const removeGlobalTask = useStore((s) => s.removeGlobalTask);
+  const moveGlobalTask = useStore((s) => s.moveGlobalTask);
   const { pressing, handlers, consumeLongPress } = useLongPress(onLongPress);
-  const loggedTime = task.baseType === "Time"
-    ? task.history.reduce((total, entry) => total + entry.amountLogged, 0)
-    : 0;
+  const loggedTime =
+    task.baseType === "Time"
+      ? task.history.reduce((total, entry) => total + entry.amountLogged, 0)
+      : 0;
+
+  const subtitle =
+    task.recurrence === "Once"
+      ? `${task.baseType} · ${task.expiresAt ?? "no date"}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} logged` : ""}`
+      : isParent
+        ? "Major task"
+        : task.baseType;
 
   return (
     <motion.li
@@ -69,17 +86,42 @@ function TaskRow({
       }}
       animate={{ scale: pressing ? 0.96 : 1, opacity: pressing ? 0.7 : 1 }}
       transition={{ duration: pressing ? 0.45 : 0.18 }}
-      className="flex select-none items-center justify-between border-b border-border py-4"
+      className={`flex select-none items-center justify-between border-b border-border py-4 ${
+        nested ? "pl-4" : ""
+      }`}
     >
       <div className="min-w-0">
         <p className="truncate text-[15px]">{task.title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {task.recurrence === "Once"
-            ? `${task.baseType} · ${task.expiresAt ?? "no date"}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} logged` : ""}`
-            : `Repetitive · ${task.baseType}`}
-        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
       </div>
-      {task.recurrence === "Once" && (
+
+      <div className="ml-3 flex shrink-0 items-center gap-1">
+        {task.recurrence === "Repetitive" && (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                moveGlobalTask(task.id, -1);
+              }}
+              aria-label="Move up"
+              className="text-muted-foreground/60 transition-colors hover:text-foreground"
+            >
+              <ChevronUp className="size-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                moveGlobalTask(task.id, 1);
+              }}
+              aria-label="Move down"
+              className="text-muted-foreground/60 transition-colors hover:text-foreground"
+            >
+              <ChevronDown className="size-4" />
+            </button>
+          </>
+        )}
+
+        {task.recurrence === "Once" && (
           <Button
             variant="ghost"
             size="icon"
@@ -87,12 +129,24 @@ function TaskRow({
               event.stopPropagation();
               completeGlobalTask(task.id);
             }}
-          aria-label="Mark completed"
-            className="ml-3 size-7 shrink-0 rounded-full border border-border text-muted-foreground"
-        >
-          <Check className="size-3.5" />
+            aria-label="Mark completed"
+            className="size-7 rounded-full border border-border text-muted-foreground"
+          >
+            <Check className="size-3.5" />
           </Button>
-      )}
+        )}
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            removeGlobalTask(task.id);
+          }}
+          aria-label="Delete task"
+          className="text-muted-foreground/60 transition-colors hover:text-foreground"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
     </motion.li>
   );
 }
@@ -107,7 +161,8 @@ function localDateParts(value: string) {
 function entriesForPeriod(history: HistoryEntry[], period: StatsPeriod) {
   if (period === "Total") return history;
   const now = new Date();
-  if (period === "Yearly") return history.filter((entry) => localDateParts(entry.date).year === now.getFullYear());
+  if (period === "Yearly")
+    return history.filter((entry) => localDateParts(entry.date).year === now.getFullYear());
   if (period === "Monthly") {
     return history.filter((entry) => {
       const { year, month } = localDateParts(entry.date);
@@ -124,36 +179,125 @@ function entriesForPeriod(history: HistoryEntry[], period: StatsPeriod) {
   });
 }
 
-function TaskStats({ task, onClose }: { task: GlobalTask | null; onClose: () => void }) {
+function HistoryEditor({ task }: { task: GlobalTask }) {
+  const updateHistoryEntry = useStore((s) => s.updateHistoryEntry);
+  const removeHistoryEntry = useStore((s) => s.removeHistoryEntry);
+  const days = recentDayKeys();
+  const entries = task.history.filter((e) => days.includes(e.date));
+
+  return (
+    <div className="mt-2">
+      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        Edit last 48 hours
+      </p>
+      {entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing logged in the last 3 days.</p>
+      ) : (
+        <ul className="space-y-2">
+          {entries.map((entry) => (
+            <li key={entry.id} className="flex items-center gap-2">
+              <span className="flex-1 text-xs text-muted-foreground">
+                {entry.date === days[0] ? "Today" : entry.date === days[1] ? "Yesterday" : entry.date}
+              </span>
+              <Input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                aria-label={`Amount logged on ${entry.date}`}
+                value={String(Math.round(entry.amountLogged))}
+                onChange={(e) =>
+                  updateHistoryEntry(task.id, entry.id, Math.max(0, Number(e.target.value) || 0))
+                }
+                className="h-8 w-24 px-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield]"
+              />
+              <span className="w-10 text-xs text-muted-foreground">
+                {task.baseType === "Time" ? "min" : task.baseType === "Count" ? "reps" : "done"}
+              </span>
+              <button
+                onClick={() => removeHistoryEntry(task.id, entry.id)}
+                aria-label="Delete entry"
+                className="text-muted-foreground/70 hover:text-foreground"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function TaskStats({
+  task,
+  allTasks,
+  onClose,
+}: {
+  task: GlobalTask | null;
+  allTasks: GlobalTask[];
+  onClose: () => void;
+}) {
   const periods: StatsPeriod[] = ["Total", "Yearly", "Monthly", "Weekly"];
+  const children = task ? allTasks.filter((g) => g.parentId === task.id) : [];
+  const isParent = children.length > 0;
+  const history = task ? aggregatedHistory(task, allTasks) : [];
+
+  /** A major task counts for a day only if every subtask logged that day. */
+  const parentDaysDone = (entries: HistoryEntry[]) => {
+    const dayCounts = new Map<string, Set<string>>();
+    children.forEach((child) => {
+      child.history.forEach((entry) => {
+        if (!entries.includes(entry)) return;
+        if (!dayCounts.has(entry.date)) dayCounts.set(entry.date, new Set());
+        dayCounts.get(entry.date)!.add(child.id);
+      });
+    });
+    return [...dayCounts.values()].filter((set) => set.size === children.length).length;
+  };
+
   return (
     <Dialog open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-sm rounded-lg border-border bg-card">
+      <DialogContent className="max-h-[85vh] max-w-sm overflow-y-auto rounded-lg border-border bg-card">
         <DialogHeader>
           <DialogTitle>{task?.title}</DialogTitle>
-          <DialogDescription>Progress history</DialogDescription>
+          <DialogDescription>
+            {isParent ? "Combined progress of its subtasks" : "Progress history"}
+          </DialogDescription>
         </DialogHeader>
         {task && (
-          <div className="divide-y divide-border">
-            {periods.map((period) => {
-              const entries = entriesForPeriod(task.history, period);
-              const daysDone = new Set(entries.map((entry) => entry.date)).size;
-              const amount = entries.reduce((total, entry) => total + entry.amountLogged, 0);
-              return (
-                <div key={period} className="flex items-center justify-between py-4">
-                  <span className="text-sm text-muted-foreground">{period}</span>
-                  <div className="text-right">
-                    <p className="text-sm font-medium tabular-nums">{daysDone} {daysDone === 1 ? "day" : "days"} done</p>
-                    {task.baseType !== "Simple" && (
-                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                        {task.baseType === "Time" ? formatMinutes(amount) : `${amount} total`}
+          <>
+            <div className="divide-y divide-border">
+              {periods.map((period) => {
+                const entries = entriesForPeriod(history, period);
+                const daysDone = isParent
+                  ? parentDaysDone(entries)
+                  : new Set(entries.map((entry) => entry.date)).size;
+                const amount = entries.reduce((total, entry) => total + entry.amountLogged, 0);
+                const showAmount = isParent
+                  ? children.some((c) => c.baseType !== "Simple")
+                  : task.baseType !== "Simple";
+                const unitTask = isParent
+                  ? (children.find((c) => c.baseType !== "Simple") ?? task)
+                  : task;
+                return (
+                  <div key={period} className="flex items-center justify-between py-4">
+                    <span className="text-sm text-muted-foreground">{period}</span>
+                    <div className="text-right">
+                      <p className="text-sm font-medium tabular-nums">
+                        {daysDone} {daysDone === 1 ? "day" : "days"} done
                       </p>
-                    )}
+                      {showAmount && (
+                        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                          {unitTask.baseType === "Time" ? formatMinutes(amount) : `${amount} total`}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+            {!isParent && <HistoryEditor task={task} />}
+          </>
         )}
       </DialogContent>
     </Dialog>
@@ -162,10 +306,16 @@ function TaskStats({ task, onClose }: { task: GlobalTask | null; onClose: () => 
 
 function Composer({ onClose }: { onClose: () => void }) {
   const addGlobalTask = useStore((s) => s.addGlobalTask);
+  const globalTasks = useStore((s) => s.globalTasks);
   const [title, setTitle] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("Once");
   const [baseType, setBaseType] = useState<TrackingType>("Simple");
+  const [parentId, setParentId] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState(new Date().toISOString().slice(0, 10));
+
+  const parentOptions = globalTasks.filter(
+    (g) => g.recurrence === "Repetitive" && !g.parentId && !g.isGloballyCompleted,
+  );
 
   const submit = () => {
     if (!title.trim()) return;
@@ -173,6 +323,7 @@ function Composer({ onClose }: { onClose: () => void }) {
       title: title.trim(),
       recurrence,
       baseType,
+      parentId: recurrence === "Repetitive" && parentId ? parentId : null,
       ...(recurrence === "Once" ? { expiresAt } : {}),
     });
     onClose();
@@ -222,6 +373,21 @@ function Composer({ onClose }: { onClose: () => void }) {
           </Chip>
         ))}
       </div>
+      {recurrence === "Repetitive" && parentOptions.length > 0 && (
+        <select
+          value={parentId}
+          onChange={(e) => setParentId(e.target.value)}
+          aria-label="Part of a major task"
+          className="mt-3 w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-xs text-muted-foreground outline-none"
+        >
+          <option value="">Standalone task</option>
+          {parentOptions.map((p) => (
+            <option key={p.id} value={p.id}>
+              Part of: {p.title}
+            </option>
+          ))}
+        </select>
+      )}
       {recurrence === "Once" && (
         <input
           type="date"
@@ -244,19 +410,38 @@ function AllTasks() {
   useDailyReset();
   const hydrated = useHydrated();
   const globalTasks = useStore((s) => s.globalTasks);
+  const dailyTasks = useStore((s) => s.dailyTasks);
   const [selected, setSelected] = useState<GlobalTask | null>(null);
   const [statsTask, setStatsTask] = useState<GlobalTask | null>(null);
   const [composing, setComposing] = useState(false);
 
-  const { once, repetitive } = useMemo(() => {
+  const { once, repetitive, childrenOf, parentIds } = useMemo(() => {
     const active = globalTasks.filter((t) => !t.isGloballyCompleted);
+    const parents = new Set(active.map((t) => t.parentId).filter(Boolean) as string[]);
     return {
       once: active
         .filter((t) => t.recurrence === "Once")
         .sort((a, b) => (a.expiresAt ?? "9999").localeCompare(b.expiresAt ?? "9999")),
-      repetitive: active.filter((t) => t.recurrence === "Repetitive"),
+      repetitive: active.filter((t) => t.recurrence === "Repetitive" && !t.parentId),
+      childrenOf: (id: string) => active.filter((t) => t.parentId === id),
+      parentIds: parents,
     };
   }, [globalTasks]);
+
+  const plannedToday = new Set(dailyTasks.map((d) => d.globalTaskId));
+
+  const tryPlan = (task: GlobalTask) => {
+    // Major tasks can't be planned, and nothing can be planned twice a day.
+    if (parentIds.has(task.id) || plannedToday.has(task.id)) return;
+    setSelected(task);
+  };
+
+  const rowProps = (task: GlobalTask) => ({
+    task,
+    isParent: parentIds.has(task.id),
+    onLongPress: () => tryPlan(task),
+    onOpenStats: () => setStatsTask(task),
+  });
 
   return (
     <div className="mx-auto min-h-screen max-w-md px-6 pb-28 pt-12">
@@ -280,7 +465,7 @@ function AllTasks() {
           <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Once</p>
           <ul>
             {once.map((t) => (
-              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} onOpenStats={() => setStatsTask(t)} />
+              <TaskRow key={t.id} {...rowProps(t)} />
             ))}
           </ul>
         </section>
@@ -293,7 +478,12 @@ function AllTasks() {
           </p>
           <ul>
             {repetitive.map((t) => (
-              <TaskRow key={t.id} task={t} onLongPress={() => setSelected(t)} onOpenStats={() => setStatsTask(t)} />
+              <div key={t.id}>
+                <TaskRow {...rowProps(t)} />
+                {childrenOf(t.id).map((child) => (
+                  <TaskRow key={child.id} {...rowProps(child)} nested />
+                ))}
+              </div>
             ))}
           </ul>
         </section>
@@ -304,7 +494,7 @@ function AllTasks() {
       )}
 
       <AddToDaySheet task={selected} onClose={() => setSelected(null)} />
-      <TaskStats task={statsTask} onClose={() => setStatsTask(null)} />
+      <TaskStats task={statsTask} allTasks={globalTasks} onClose={() => setStatsTask(null)} />
       <BottomNav />
     </div>
   );
