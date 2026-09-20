@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useStore } from "@/lib/store";
 
-/** Clears My Day when the 4 AM boundary has passed since the last reset. */
+/** Clears My Day at the 4 AM boundary and folds in timers that ran while closed. */
 export function useDailyReset() {
   const checkReset = useStore((s) => s.checkReset);
 
