@@ -102,3 +102,18 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Android / Capacitor
+
+The Vercel web deployment and the Android build use different Vite outputs.
+
+For Android, run:
+
+```bash
+npm install
+npm run build:android
+```
+
+`build:android` enables TanStack Start SPA mode, generates `.output/public/index.html`, and runs `npx cap sync android` so Capacitor packages the generated web assets into the Android project.
+
+After that, open the `android` directory in Android Studio and run/build the app.
