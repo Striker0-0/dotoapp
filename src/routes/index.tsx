@@ -412,7 +412,8 @@ function AllTasks() {
   const globalTasks = useStore((s) => s.globalTasks);
   const dailyTasks = useStore((s) => s.dailyTasks);
   const [selected, setSelected] = useState<GlobalTask | null>(null);
-  const [statsTask, setStatsTask] = useState<GlobalTask | null>(null);
+  const [statsTaskId, setStatsTaskId] = useState<string | null>(null);
+  const statsTask = globalTasks.find((g) => g.id === statsTaskId) ?? null;
   const [composing, setComposing] = useState(false);
 
   const { once, repetitive, childrenOf, parentIds } = useMemo(() => {
