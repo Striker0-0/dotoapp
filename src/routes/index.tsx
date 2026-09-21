@@ -63,16 +63,16 @@ function TaskRow({
   task,
   isParent,
   nested,
+  onPrimaryClick,
   onLongPress,
-  onOpenStats,
   onRequestEdit,
   onRequestDelete,
 }: {
   task: GlobalTask;
   isParent: boolean;
   nested?: boolean;
+  onPrimaryClick: () => void;
   onLongPress: () => void;
-  onOpenStats: () => void;
   onRequestEdit: () => void;
   onRequestDelete: () => void;
 }) {
@@ -96,7 +96,7 @@ function TaskRow({
       {...handlers}
       onClick={() => {
         if (consumeLongPress()) return;
-        if (task.recurrence === "Repetitive") onOpenStats();
+        onPrimaryClick();
       }}
       animate={{ scale: pressing ? 0.96 : 1, opacity: pressing ? 0.7 : 1 }}
       transition={{ duration: pressing ? 0.45 : 0.18 }}
@@ -110,30 +110,26 @@ function TaskRow({
       </div>
 
       <div className="ml-3 flex shrink-0 items-center gap-3">
-        {task.recurrence === "Repetitive" && (
-          <>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                moveGlobalTask(task.id, -1);
-              }}
-              aria-label="Move up"
-              className="text-muted-foreground/60 transition-colors hover:text-foreground"
-            >
-              <ChevronUp className="size-4" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                moveGlobalTask(task.id, 1);
-              }}
-              aria-label="Move down"
-              className="text-muted-foreground/60 transition-colors hover:text-foreground"
-            >
-              <ChevronDown className="size-4" />
-            </button>
-          </>
-        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            moveGlobalTask(task.id, -1);
+          }}
+          aria-label="Move up"
+          className="p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground"
+        >
+          <ChevronUp className="size-4" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            moveGlobalTask(task.id, 1);
+          }}
+          aria-label="Move down"
+          className="p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground"
+        >
+          <ChevronDown className="size-4" />
+        </button>
 
         <button
           onClick={(e) => {
@@ -141,9 +137,9 @@ function TaskRow({
             onRequestEdit();
           }}
           aria-label="Edit task"
-          className="text-muted-foreground/60 transition-colors hover:text-foreground"
+          className="p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground"
         >
-          <Pencil className="size-3.5" />
+          <Pencil className="size-4" />
         </button>
 
         <button
@@ -152,9 +148,9 @@ function TaskRow({
             onRequestDelete();
           }}
           aria-label="Delete task"
-          className="text-muted-foreground/60 transition-colors hover:text-destructive"
+          className="p-1.5 text-muted-foreground/60 transition-colors hover:text-destructive"
         >
-          <Trash2 className="size-3.5" />
+          <Trash2 className="size-4" />
         </button>
       </div>
     </motion.li>
@@ -178,7 +174,6 @@ function localDateParts(value: string) {
 
 function entriesForPeriod(history: HistoryEntry[], period: StatsPeriod) {
   if (period === "Total") return history;
-  // Compare against the logical day (days start at 4 AM), not the clock date.
   const now = localDateParts(dayKey()).date;
   if (period === "Yearly")
     return history.filter((entry) => localDateParts(entry.date).year === now.getFullYear());
@@ -261,7 +256,6 @@ function TaskStats({
   const isParent = children.length > 0;
   const history = task ? aggregatedHistory(task, allTasks) : [];
 
-  /** A major task counts for a day only if every subtask logged that day. */
   const parentDaysDone = (entries: HistoryEntry[]) => {
     const dayCounts = new Map<string, Set<string>>();
     children.forEach((child) => {
@@ -273,8 +267,6 @@ function TaskStats({
     });
     return [...dayCounts.values()].filter((set) => set.size === children.length).length;
   };
-
-
 
   return (
     <Dialog open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
@@ -462,7 +454,6 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
         <div className="space-y-4 py-4">
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Title</label>
-            {/* autoFocus removed here */}
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
 
@@ -531,7 +522,6 @@ function AllTasks() {
   const plannedToday = new Set(dailyTasks.map((d) => d.globalTaskId));
 
   const tryPlan = (task: GlobalTask) => {
-    // Major tasks can't be planned, and nothing can be planned twice a day.
     if (parentIds.has(task.id) || plannedToday.has(task.id)) return;
     setSelected(task);
   };
@@ -539,8 +529,14 @@ function AllTasks() {
   const rowProps = (task: GlobalTask) => ({
     task,
     isParent: parentIds.has(task.id),
-    onLongPress: () => tryPlan(task),
-    onOpenStats: () => setStatsTaskId(task.id),
+    onPrimaryClick: () => {
+      if (parentIds.has(task.id)) {
+        setStatsTaskId(task.id);
+      } else {
+        tryPlan(task);
+      }
+    },
+    onLongPress: () => setStatsTaskId(task.id),
     onRequestEdit: () => setPendingEditId(task.id),
     onRequestDelete: () => setPendingDeleteId(task.id),
   });
@@ -563,7 +559,7 @@ function AllTasks() {
       <AnimatePresence>{composing && <Composer onClose={() => setComposing(false)} />}</AnimatePresence>
 
       {hydrated && repetitive.length > 0 && (
-        <section>
+        <section className="mb-8">
           <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             Repetitive
           </p>
@@ -623,6 +619,7 @@ function AllTasks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       <EditTaskDialog task={pendingEdit} onClose={() => setPendingEditId(null)} />
       <BottomNav />
     </div>
