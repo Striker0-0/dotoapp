@@ -18,6 +18,7 @@ import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
 import {
   aggregatedHistory,
+  dayKey,
   formatMinutes,
   recentDayKeys,
   useStore,
