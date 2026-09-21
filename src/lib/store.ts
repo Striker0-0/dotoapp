@@ -226,9 +226,9 @@ export const useStore = create<State>()(
           const done = value >= daily.targetValue;
           const global = s.globalTasks.find((g) => g.id === daily.globalTaskId);
           let globalTasks = writeHistory(s.globalTasks, daily.globalTaskId, daily.id, value);
-          if (done && global?.recurrence === "Once") {
+          if (global?.recurrence === "Once") {
             globalTasks = globalTasks.map((g) =>
-              g.id === global.id ? { ...g, isGloballyCompleted: true } : g,
+              g.id === global.id ? { ...g, isGloballyCompleted: done } : g,
             );
           }
           return {
@@ -254,9 +254,9 @@ export const useStore = create<State>()(
             daily.id,
             wasDone ? 0 : 1,
           );
-          if (!wasDone && global?.recurrence === "Once") {
+          if (global?.recurrence === "Once") {
             globalTasks = globalTasks.map((g) =>
-              g.id === global.id ? { ...g, isGloballyCompleted: true } : g,
+              g.id === global.id ? { ...g, isGloballyCompleted: !wasDone } : g,
             );
           }
           return {
