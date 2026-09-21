@@ -18,6 +18,7 @@ import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
 import {
   aggregatedHistory,
+  dayKey,
   formatMinutes,
   recentDayKeys,
   useStore,
@@ -160,7 +161,8 @@ function localDateParts(value: string) {
 
 function entriesForPeriod(history: HistoryEntry[], period: StatsPeriod) {
   if (period === "Total") return history;
-  const now = new Date();
+  // Compare against the logical day (days start at 4 AM), not the clock date.
+  const now = localDateParts(dayKey()).date;
   if (period === "Yearly")
     return history.filter((entry) => localDateParts(entry.date).year === now.getFullYear());
   if (period === "Monthly") {
@@ -412,7 +414,8 @@ function AllTasks() {
   const globalTasks = useStore((s) => s.globalTasks);
   const dailyTasks = useStore((s) => s.dailyTasks);
   const [selected, setSelected] = useState<GlobalTask | null>(null);
-  const [statsTask, setStatsTask] = useState<GlobalTask | null>(null);
+  const [statsTaskId, setStatsTaskId] = useState<string | null>(null);
+  const statsTask = globalTasks.find((g) => g.id === statsTaskId) ?? null;
   const [composing, setComposing] = useState(false);
 
   const { once, repetitive, childrenOf, parentIds } = useMemo(() => {
@@ -440,7 +443,7 @@ function AllTasks() {
     task,
     isParent: parentIds.has(task.id),
     onLongPress: () => tryPlan(task),
-    onOpenStats: () => setStatsTask(task),
+    onOpenStats: () => setStatsTaskId(task.id),
   });
 
   return (
@@ -494,7 +497,7 @@ function AllTasks() {
       )}
 
       <AddToDaySheet task={selected} onClose={() => setSelected(null)} />
-      <TaskStats task={statsTask} allTasks={globalTasks} onClose={() => setStatsTask(null)} />
+      <TaskStats task={statsTask} allTasks={globalTasks} onClose={() => setStatsTaskId(null)} />
       <BottomNav />
     </div>
   );
