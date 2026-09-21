@@ -447,7 +447,10 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
 
   return (
     <Dialog open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-sm rounded-lg border-border bg-card">
+      <DialogContent
+        className="max-w-sm rounded-lg border-border bg-card"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
         </DialogHeader>
