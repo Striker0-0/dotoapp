@@ -1,6 +1,0 @@
-{
-  "appId": "com.striker.dotoapp",
-  "appName": "dotoapp",
-  "webDir": "dist",
-  "bundledWebRuntime": false
-}
