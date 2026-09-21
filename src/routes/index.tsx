@@ -12,6 +12,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogueFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -64,6 +65,7 @@ function TaskRow({
   nested,
   onLongPress,
   onOpenStats,
+  onRequestEdit,
   onRequestDelete,
 }: {
   task: GlobalTask;
@@ -71,6 +73,7 @@ function TaskRow({
   nested?: boolean;
   onLongPress: () => void;
   onOpenStats: () => void;
+  onRequestEdit: () => void;
   onRequestDelete: () => void;
 }) {
   const moveGlobalTask = useStore((s) => s.moveGlobalTask);
@@ -82,7 +85,7 @@ function TaskRow({
 
   const subtitle =
     task.recurrence === "Once"
-      ? `${task.baseType} · ${task.expiresAt ?? "no date"}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} logged` : ""}`
+      ? `${task.baseType} · ${formatDateDDMMYYYY(task.expiresAt)}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} logged` : ""}`
       : isParent
         ? "Major task"
         : task.baseType;
@@ -135,6 +138,17 @@ function TaskRow({
         <button
           onClick={(e) => {
             e.stopPropagation();
+            onRequestEdit();
+          }}
+          aria-label="Edit task"
+          className="text-muted-foreground/60 transition-colors hover:text-foreground"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
             onRequestDelete();
           }}
           aria-label="Delete task"
@@ -148,6 +162,14 @@ function TaskRow({
 }
 
 type StatsPeriod = "Total" | "Yearly" | "Monthly" | "Weekly";
+
+function formatDateDDMMYYYY(dateString?: string | null) {
+  if (!dateString) return "no date";
+  const parts = dateString.split("-");
+  if (parts.length !== 3) return dateString;
+  const [y, m, d] = parts;
+  return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y}`;
+}
 
 function localDateParts(value: string) {
   const [year = 0, month = 0, day = 0] = value.split("-").map(Number);
@@ -251,6 +273,8 @@ function TaskStats({
     });
     return [...dayCounts.values()].filter((set) => set.size === children.length).length;
   };
+
+
 
   return (
     <Dialog open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
@@ -403,6 +427,63 @@ function Composer({ onClose }: { onClose: () => void }) {
   );
 }
 
+function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: () => void }) {
+  const updateGlobalTask = useStore((s) => s.updateGlobalTask);
+  const [title, setTitle] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+
+  // Populate data when dialog opens
+  useMemo(() => {
+    if (task) {
+      setTitle(task.title);
+      setExpiresAt(task.expiresAt || new Date().toISOString().slice(0, 10));
+    }
+  }, [task]);
+
+  if (!task) return null;
+
+  const submit = () => {
+    if (!title.trim()) return;
+    updateGlobalTask(task.id, {
+      title: title.trim(),
+      expiresAt: task.recurrence === "Once" ? expiresAt : task.expiresAt,
+    });
+    onClose();
+  };
+
+  return (
+    <Dialog open={Boolean(task)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm rounded-lg border-border bg-card">
+        <DialogHeader>
+          <DialogTitle>Edit Task</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">Title</label>
+            <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          {task.recurrence === "Once" && (
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Date</label>
+              {/* Native date inputs output YYYY-MM-DD but display dynamically based on the user's OS locale (like DD-MM-YYYY). */}
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none"
+              />
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="ghost" onClick={onClose} className="border border-border">Cancel</Button>
+          <Button onClick={submit} className="bg-foreground text-background">Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AllTasks() {
   useDailyReset();
   const hydrated = useHydrated();
@@ -414,6 +495,8 @@ function AllTasks() {
   const statsTask = globalTasks.find((g) => g.id === statsTaskId) ?? null;
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const pendingDelete = globalTasks.find((g) => g.id === pendingDeleteId) ?? null;
+  const [pendingEditId, setPendingEditId] = useState<string | null>(null);
+  const pendingEdit = globalTasks.find((g) => g.id === pendingEditId) ?? null;
   const [composing, setComposing] = useState(false);
 
   const { once, repetitive, childrenOf, parentIds } = useMemo(() => {
@@ -442,6 +525,7 @@ function AllTasks() {
     isParent: parentIds.has(task.id),
     onLongPress: () => tryPlan(task),
     onOpenStats: () => setStatsTaskId(task.id),
+    onRequestEdit: () => setPendingEditId(task.id),
     onRequestDelete: () => setPendingDeleteId(task.id),
   });
 
@@ -462,17 +546,6 @@ function AllTasks() {
 
       <AnimatePresence>{composing && <Composer onClose={() => setComposing(false)} />}</AnimatePresence>
 
-      {hydrated && once.length > 0 && (
-        <section className="mb-8">
-          <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Once</p>
-          <ul>
-            {once.map((t) => (
-              <TaskRow key={t.id} {...rowProps(t)} />
-            ))}
-          </ul>
-        </section>
-      )}
-
       {hydrated && repetitive.length > 0 && (
         <section>
           <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -486,6 +559,17 @@ function AllTasks() {
                   <TaskRow key={child.id} {...rowProps(child)} nested />
                 ))}
               </div>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {hydrated && once.length > 0 && (
+        <section className="mb-8">
+          <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Once</p>
+          <ul>
+            {once.map((t) => (
+              <TaskRow key={t.id} {...rowProps(t)} />
             ))}
           </ul>
         </section>
@@ -523,7 +607,7 @@ function AllTasks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
+      <EditTaskDialog task={pendingEdit} onClose={() => setPendingEditId(null)} />
       <BottomNav />
     </div>
   );

@@ -53,6 +53,7 @@ interface State {
   addGlobalTask: (
     t: Omit<GlobalTask, "id" | "isGloballyCompleted" | "history">,
   ) => void;
+  updateGlobalTask: (id: string, updates: Partial<GlobalTask>) => void;
   removeGlobalTask: (id: string) => void;
   completeGlobalTask: (id: string) => void;
   moveGlobalTask: (id: string, direction: -1 | 1) => void;
@@ -160,6 +161,13 @@ export const useStore = create<State>()(
             ...s.globalTasks,
             { parentId: null, ...t, id: uid(), isGloballyCompleted: false, history: [] },
           ],
+        })),
+
+      updateGlobalTask: (id, updates) =>
+        set((s) => ({
+          globalTasks: s.globalTasks.map((g) =>
+            g.id === id ? { ...g, ...updates } : g,
+          ),
         })),
 
       removeGlobalTask: (id) =>
