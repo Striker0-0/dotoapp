@@ -13,6 +13,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useLongPress } from "@/components/useLongPress";
 import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
@@ -54,15 +64,16 @@ function TaskRow({
   nested,
   onLongPress,
   onOpenStats,
+  onRequestDelete,
 }: {
   task: GlobalTask;
   isParent: boolean;
   nested?: boolean;
   onLongPress: () => void;
   onOpenStats: () => void;
+  onRequestDelete: () => void;
 }) {
   const completeGlobalTask = useStore((s) => s.completeGlobalTask);
-  const removeGlobalTask = useStore((s) => s.removeGlobalTask);
   const moveGlobalTask = useStore((s) => s.moveGlobalTask);
   const { pressing, handlers, consumeLongPress } = useLongPress(onLongPress);
   const loggedTime =
