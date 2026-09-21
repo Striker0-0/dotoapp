@@ -1,0 +1,6 @@
+{
+  "appId": "com.striker.dotoapp",
+  "appName": "dotoapp",
+  "webDir": ".output/public",
+  "bundledWebRuntime": false
+}
