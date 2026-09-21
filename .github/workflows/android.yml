@@ -20,45 +20,7 @@ jobs:
       - name: Install Dependencies & Build Web App
         run: |
           npm install
-          npm run generate
-
-      - name: Generate index.html for Capacitor
-        run: |
-          # Print output directory structure to GitHub Actions logs for debugging
-          echo "=== Files in .output/public ==="
-          find .output/public
-
-          # Find the first JS and CSS file recursively anywhere inside .output/public
-          JS_FILE=$(find .output/public -type f -name "*.js" | head -n 1 | sed 's|^\.output/public/||' | sed 's|^/||')
-          CSS_FILE=$(find .output/public -type f -name "*.css" | head -n 1 | sed 's|^\.output/public/||' | sed 's|^/||')
-
-          echo "Injected JS: $JS_FILE"
-          echo "Injected CSS: $CSS_FILE"
-
-          # Fail the action if no JS file was built
-          if [ -z "$JS_FILE" ]; then
-            echo "ERROR: No JavaScript file found in .output/public!"
-            exit 1
-          fi
-
-          # Generate index.html with fallback DOM containers
-          cat <<EOF > .output/public/index.html
-          <!DOCTYPE html>
-          <html lang="en">
-            <head>
-              <meta charset="UTF-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-              <title>Doto App</title>
-              ${CSS_FILE:+<link rel="stylesheet" href="./$CSS_FILE" />}
-            </head>
-            <body>
-              <div id="root"></div>
-              <div id="app"></div>
-              <div id="__nuxt"></div>
-              <script type="module" src="./$JS_FILE"></script>
-            </body>
-          </html>
-          EOF
+          npm run build
 
       - name: Set up JDK for Android
         uses: actions/setup-java@v5
