@@ -324,6 +324,7 @@ function Composer({ onClose }: { onClose: () => void }) {
   const [recurrence, setRecurrence] = useState<Recurrence>("Once");
   const [baseType, setBaseType] = useState<TrackingType>("Simple");
   const [parentId, setParentId] = useState<string>("");
+  const [hasExpiration, setHasExpiration] = useState(false);
   const [expiresAt, setExpiresAt] = useState(new Date().toISOString().slice(0, 10));
 
   const parentOptions = globalTasks.filter(
@@ -337,7 +338,7 @@ function Composer({ onClose }: { onClose: () => void }) {
       recurrence,
       baseType,
       parentId: recurrence === "Repetitive" && parentId ? parentId : null,
-      ...(recurrence === "Once" ? { expiresAt } : {}),
+      ...(recurrence === "Once" && hasExpiration && expiresAt ? { expiresAt } : {}),
     });
     onClose();
   };
@@ -373,24 +374,18 @@ function Composer({ onClose }: { onClose: () => void }) {
           <X className="size-4 text-muted-foreground" />
         </button>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <div className="flex shrink-0 gap-1.5">
-          {(["Once", "Repetitive"] as const).map((r) => (
-            <Chip key={r} on={recurrence === r} onClick={() => setRecurrence(r)}>
-              {r}
-            </Chip>
-          ))}
-        </div>
-
-        <span className="mx-1 h-5 w-px shrink-0 bg-border" />
-
-        <div className="flex shrink-0 gap-1.5">
-          {(["Simple", "Time", "Count"] as const).map((t) => (
-            <Chip key={t} on={baseType === t} onClick={() => setBaseType(t)}>
-              {t}
-            </Chip>
-          ))}
-        </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {(["Once", "Repetitive"] as const).map((r) => (
+          <Chip key={r} on={recurrence === r} onClick={() => setRecurrence(r)}>
+            {r}
+          </Chip>
+        ))}
+        <span className="mx-1 w-px bg-border" />
+        {(["Simple", "Time", "Count"] as const).map((t) => (
+          <Chip key={t} on={baseType === t} onClick={() => setBaseType(t)}>
+            {t}
+          </Chip>
+        ))}
       </div>
       {recurrence === "Repetitive" && parentOptions.length > 0 && (
         <select
@@ -408,12 +403,22 @@ function Composer({ onClose }: { onClose: () => void }) {
         </select>
       )}
       {recurrence === "Once" && (
-        <input
-          type="date"
-          value={expiresAt}
-          onChange={(e) => setExpiresAt(e.target.value)}
-          className="mt-3 bg-transparent text-xs text-muted-foreground outline-none"
-        />
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <Chip on={hasExpiration} onClick={() => setHasExpiration(true)}>
+            Expires
+          </Chip>
+          <Chip on={!hasExpiration} onClick={() => setHasExpiration(false)}>
+            No expiration
+          </Chip>
+          {hasExpiration && (
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className="ml-auto min-w-0 bg-transparent text-xs text-muted-foreground outline-none"
+            />
+          )}
+        </div>
       )}
       <button
         onClick={submit}
@@ -428,12 +433,14 @@ function Composer({ onClose }: { onClose: () => void }) {
 function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: () => void }) {
   const updateGlobalTask = useStore((s) => s.updateGlobalTask);
   const [title, setTitle] = useState("");
+  const [hasExpiration, setHasExpiration] = useState(false);
   const [expiresAt, setExpiresAt] = useState("");
   const [baseType, setBaseType] = useState<TrackingType>("Simple");
 
   useMemo(() => {
     if (task) {
       setTitle(task.title);
+      setHasExpiration(Boolean(task.expiresAt));
       setExpiresAt(task.expiresAt || new Date().toISOString().slice(0, 10));
       setBaseType(task.baseType);
     }
@@ -446,7 +453,7 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
     updateGlobalTask(task.id, {
       title: title.trim(),
       baseType,
-      expiresAt: task.recurrence === "Once" ? expiresAt : task.expiresAt,
+      expiresAt: task.recurrence === "Once" && hasExpiration && expiresAt ? expiresAt : undefined,
     });
     onClose();
   };
@@ -481,13 +488,33 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
 
           {task.recurrence === "Once" && (
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Date</label>
-              <input
-                type="date"
-                value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none"
-              />
+              <label className="mb-1 block text-xs text-muted-foreground">Expiration</label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant={hasExpiration ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setHasExpiration(true)}
+                >
+                  Expires
+                </Button>
+                <Button
+                  type="button"
+                  variant={!hasExpiration ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setHasExpiration(false)}
+                >
+                  No expiration
+                </Button>
+                {hasExpiration && (
+                  <input
+                    type="date"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                    className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none"
+                  />
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -515,13 +542,15 @@ function AllTasks() {
   const pendingEdit = globalTasks.find((g) => g.id === pendingEditId) ?? null;
   const [composing, setComposing] = useState(false);
 
-  const { once, repetitive, childrenOf, parentIds } = useMemo(() => {
+  const { expiringOnce, nonExpiringOnce, repetitive, childrenOf, parentIds } = useMemo(() => {
     const active = globalTasks.filter((t) => !t.isGloballyCompleted);
     const parents = new Set(active.map((t) => t.parentId).filter(Boolean) as string[]);
+    const once = active.filter((t) => t.recurrence === "Once");
     return {
-      once: active
-        .filter((t) => t.recurrence === "Once")
+      expiringOnce: once
+        .filter((t) => Boolean(t.expiresAt))
         .sort((a, b) => (a.expiresAt ?? "9999").localeCompare(b.expiresAt ?? "9999")),
+      nonExpiringOnce: once.filter((t) => !t.expiresAt),
       repetitive: active.filter((t) => t.recurrence === "Repetitive" && !t.parentId),
       childrenOf: (id: string) => active.filter((t) => t.parentId === id),
       parentIds: parents,
@@ -585,18 +614,37 @@ function AllTasks() {
         </section>
       )}
 
-      {hydrated && once.length > 0 && (
+      {hydrated && (expiringOnce.length > 0 || nonExpiringOnce.length > 0) && (
         <section className="mb-8">
-          <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Once</p>
-          <ul>
-            {once.map((t) => (
-              <TaskRow key={t.id} {...rowProps(t)} />
-            ))}
-          </ul>
+          {expiringOnce.length > 0 && (
+            <div className="mb-6">
+              <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Once · Expires
+              </p>
+              <ul>
+                {expiringOnce.map((t) => (
+                  <TaskRow key={t.id} {...rowProps(t)} />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {nonExpiringOnce.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Once · No expiration
+              </p>
+              <ul>
+                {nonExpiringOnce.map((t) => (
+                  <TaskRow key={t.id} {...rowProps(t)} />
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 
-      {hydrated && once.length === 0 && repetitive.length === 0 && (
+      {hydrated && expiringOnce.length === 0 && nonExpiringOnce.length === 0 && repetitive.length === 0 && (
         <p className="mt-24 text-center text-sm text-muted-foreground">Nothing here yet.</p>
       )}
 

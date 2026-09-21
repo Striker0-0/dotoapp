@@ -16,7 +16,7 @@ export interface GlobalTask {
   title: string;
   recurrence: Recurrence;
   baseType: TrackingType;
-  expiresAt?: string; // ISO date, only for "Once"
+  expiresAt?: string; // ISO date, optional for "Once"
   isGloballyCompleted: boolean;
   history: HistoryEntry[];
   parentId?: string | null;
