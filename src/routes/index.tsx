@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, ChevronUp, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { AddToDaySheet } from "@/components/AddToDaySheet";
 import { Button } from "@/components/ui/button";
