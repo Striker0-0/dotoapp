@@ -160,7 +160,8 @@ function localDateParts(value: string) {
 
 function entriesForPeriod(history: HistoryEntry[], period: StatsPeriod) {
   if (period === "Total") return history;
-  const now = new Date();
+  // Compare against the logical day (days start at 4 AM), not the clock date.
+  const now = localDateParts(dayKey()).date;
   if (period === "Yearly")
     return history.filter((entry) => localDateParts(entry.date).year === now.getFullYear());
   if (period === "Monthly") {
