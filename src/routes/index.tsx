@@ -73,7 +73,6 @@ function TaskRow({
   onOpenStats: () => void;
   onRequestDelete: () => void;
 }) {
-  const completeGlobalTask = useStore((s) => s.completeGlobalTask);
   const moveGlobalTask = useStore((s) => s.moveGlobalTask);
   const { pressing, handlers, consumeLongPress } = useLongPress(onLongPress);
   const loggedTime =
@@ -131,21 +130,6 @@ function TaskRow({
               <ChevronDown className="size-4" />
             </button>
           </>
-        )}
-
-        {task.recurrence === "Once" && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(event) => {
-              event.stopPropagation();
-              completeGlobalTask(task.id);
-            }}
-            aria-label="Mark completed"
-            className="size-7 rounded-full border border-border text-muted-foreground"
-          >
-            <Check className="size-3.5" />
-          </Button>
         )}
 
         <button
@@ -286,12 +270,12 @@ function TaskStats({
                   ? parentDaysDone(entries)
                   : new Set(entries.map((entry) => entry.date)).size;
                 const amount = entries.reduce((total, entry) => total + entry.amountLogged, 0);
-                const showAmount = isParent
-                  ? children.some((c) => c.baseType !== "Simple")
+                const hasTime = isParent 
+                  ? children.some((c) => c.baseType === "Time") 
+                  : task.baseType === "Time";
+                const showAmount = isParent 
+                  ? hasTime 
                   : task.baseType !== "Simple";
-                const unitTask = isParent
-                  ? (children.find((c) => c.baseType !== "Simple") ?? task)
-                  : task;
                 return (
                   <div key={period} className="flex items-center justify-between py-4">
                     <span className="text-sm text-muted-foreground">{period}</span>
@@ -301,7 +285,7 @@ function TaskStats({
                       </p>
                       {showAmount && (
                         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                          {unitTask.baseType === "Time" ? formatMinutes(amount) : `${amount} total`}
+                          {hasTime ? formatMinutes(amount) : `${amount} total`}
                         </p>
                       )}
                     </div>
