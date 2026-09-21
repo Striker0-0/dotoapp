@@ -109,7 +109,7 @@ function TaskRow({
         <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
       </div>
 
-      <div className="ml-3 flex shrink-0 items-center gap-1">
+      <div className="ml-3 flex shrink-0 items-center gap-3">
         {task.recurrence === "Repetitive" && (
           <>
             <button
@@ -433,7 +433,6 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
   const [expiresAt, setExpiresAt] = useState("");
   const [baseType, setBaseType] = useState<TrackingType>("Simple");
 
-  // Populate data when dialog opens
   useMemo(() => {
     if (task) {
       setTitle(task.title);
@@ -463,10 +462,10 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
         <div className="space-y-4 py-4">
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Title</label>
-            <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
+            {/* autoFocus removed here */}
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
 
-          {/* Dropdown for Task Type */}
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Task Type</label>
             <select
