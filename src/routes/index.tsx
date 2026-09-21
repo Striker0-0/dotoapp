@@ -431,12 +431,14 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
   const updateGlobalTask = useStore((s) => s.updateGlobalTask);
   const [title, setTitle] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [baseType, setBaseType] = useState<TrackingType>("Simple");
 
   // Populate data when dialog opens
   useMemo(() => {
     if (task) {
       setTitle(task.title);
       setExpiresAt(task.expiresAt || new Date().toISOString().slice(0, 10));
+      setBaseType(task.baseType);
     }
   }, [task]);
 
@@ -446,6 +448,7 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
     if (!title.trim()) return;
     updateGlobalTask(task.id, {
       title: title.trim(),
+      baseType,
       expiresAt: task.recurrence === "Once" ? expiresAt : task.expiresAt,
     });
     onClose();
@@ -462,10 +465,24 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
             <label className="mb-1 block text-xs text-muted-foreground">Title</label>
             <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
+
+          {/* Dropdown for Task Type */}
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">Task Type</label>
+            <select
+              value={baseType}
+              onChange={(e) => setBaseType(e.target.value as TrackingType)}
+              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none"
+            >
+              <option value="Simple" className="bg-card text-foreground">Simple</option>
+              <option value="Time" className="bg-card text-foreground">Time</option>
+              <option value="Count" className="bg-card text-foreground">Count</option>
+            </select>
+          </div>
+
           {task.recurrence === "Once" && (
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Date</label>
-              {/* Native date inputs output YYYY-MM-DD but display dynamically based on the user's OS locale (like DD-MM-YYYY). */}
               <input
                 type="date"
                 value={expiresAt}
