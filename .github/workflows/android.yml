@@ -22,6 +22,18 @@ jobs:
           npm install
           npm run build
 
+      - name: Ensure index.html exists for Capacitor
+        run: |
+          # If TanStack generated a shell or another HTML file, map it to index.html
+          if [ ! -f .output/public/index.html ]; then
+            if [ -f .output/public/_shell.html ]; then
+              cp .output/public/_shell.html .output/public/index.html
+            else
+              # Fallback: find any generated HTML file and copy it as index.html
+              find .output/public -name "*.html" | head -n 1 | xargs -I {} cp {} .output/public/index.html
+            fi
+          fi
+
       - name: Set up JDK for Android
         uses: actions/setup-java@v5
         with:
