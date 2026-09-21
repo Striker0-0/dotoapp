@@ -151,10 +151,10 @@ function TaskRow({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            removeGlobalTask(task.id);
+            onRequestDelete();
           }}
           aria-label="Delete task"
-          className="text-muted-foreground/60 transition-colors hover:text-foreground"
+          className="text-muted-foreground/60 transition-colors hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
         </button>
