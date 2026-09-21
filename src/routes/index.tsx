@@ -441,7 +441,7 @@ function AllTasks() {
     task,
     isParent: parentIds.has(task.id),
     onLongPress: () => tryPlan(task),
-    onOpenStats: () => setStatsTask(task),
+    onOpenStats: () => setStatsTaskId(task.id),
   });
 
   return (
@@ -495,7 +495,7 @@ function AllTasks() {
       )}
 
       <AddToDaySheet task={selected} onClose={() => setSelected(null)} />
-      <TaskStats task={statsTask} allTasks={globalTasks} onClose={() => setStatsTask(null)} />
+      <TaskStats task={statsTask} allTasks={globalTasks} onClose={() => setStatsTaskId(null)} />
       <BottomNav />
     </div>
   );
