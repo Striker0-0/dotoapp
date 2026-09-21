@@ -12,7 +12,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogueFooter,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -216,7 +216,7 @@ function HistoryEditor({ task }: { task: GlobalTask }) {
           {entries.map((entry) => (
             <li key={entry.id} className="flex items-center gap-2">
               <span className="flex-1 text-xs text-muted-foreground">
-                {entry.date === days[0] ? "Today" : entry.date === days[1] ? "Yesterday" : entry.date}
+                {entry.date === days[0] ? "Today" : entry.date === days[1] ? "Yesterday" : formatDateDDMMYYYY(entry.date)}
               </span>
               <Input
                 type="number"
