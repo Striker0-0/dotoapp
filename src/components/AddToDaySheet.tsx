@@ -65,9 +65,6 @@ export function AddToDaySheet({
                     className="w-full rounded-xl border border-border px-4 py-3.5 text-left text-sm transition-colors hover:bg-muted"
                   >
                     <span className="font-medium">{m}</span>
-                    <span className="ml-2 text-muted-foreground">
-                      {m === "Simple" ? "just a checkbox" : "allocate time for today"}
-                    </span>
                   </button>
                 ))}
               </div>
