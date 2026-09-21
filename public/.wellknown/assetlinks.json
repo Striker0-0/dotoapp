@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.andre.doto.appv1",
+        "sha256_cert_fingerprints": ["8B:E9:D1:31:29:4F:62:65:E6:09:A3:FB:C1:E2:08:0A:F5:D5:D4:C9:C9:6C:2E:B3:AA:ED:C1:F3:6F:D5:43:20"]
+      }
+    }]
