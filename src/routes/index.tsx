@@ -13,6 +13,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useLongPress } from "@/components/useLongPress";
 import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
@@ -54,15 +64,16 @@ function TaskRow({
   nested,
   onLongPress,
   onOpenStats,
+  onRequestDelete,
 }: {
   task: GlobalTask;
   isParent: boolean;
   nested?: boolean;
   onLongPress: () => void;
   onOpenStats: () => void;
+  onRequestDelete: () => void;
 }) {
   const completeGlobalTask = useStore((s) => s.completeGlobalTask);
-  const removeGlobalTask = useStore((s) => s.removeGlobalTask);
   const moveGlobalTask = useStore((s) => s.moveGlobalTask);
   const { pressing, handlers, consumeLongPress } = useLongPress(onLongPress);
   const loggedTime =
@@ -140,10 +151,10 @@ function TaskRow({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            removeGlobalTask(task.id);
+            onRequestDelete();
           }}
           aria-label="Delete task"
-          className="text-muted-foreground/60 transition-colors hover:text-foreground"
+          className="text-muted-foreground/60 transition-colors hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
         </button>
@@ -413,9 +424,12 @@ function AllTasks() {
   const hydrated = useHydrated();
   const globalTasks = useStore((s) => s.globalTasks);
   const dailyTasks = useStore((s) => s.dailyTasks);
+  const removeGlobalTask = useStore((s) => s.removeGlobalTask);
   const [selected, setSelected] = useState<GlobalTask | null>(null);
   const [statsTaskId, setStatsTaskId] = useState<string | null>(null);
   const statsTask = globalTasks.find((g) => g.id === statsTaskId) ?? null;
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingDelete = globalTasks.find((g) => g.id === pendingDeleteId) ?? null;
   const [composing, setComposing] = useState(false);
 
   const { once, repetitive, childrenOf, parentIds } = useMemo(() => {
@@ -444,6 +458,7 @@ function AllTasks() {
     isParent: parentIds.has(task.id),
     onLongPress: () => tryPlan(task),
     onOpenStats: () => setStatsTaskId(task.id),
+    onRequestDelete: () => setPendingDeleteId(task.id),
   });
 
   return (
@@ -498,6 +513,33 @@ function AllTasks() {
 
       <AddToDaySheet task={selected} onClose={() => setSelected(null)} />
       <TaskStats task={statsTask} allTasks={globalTasks} onClose={() => setStatsTaskId(null)} />
+
+      <AlertDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDeleteId(null)}
+      >
+        <AlertDialogContent className="max-w-sm rounded-lg border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this task? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="border-border bg-transparent">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (pendingDeleteId) removeGlobalTask(pendingDeleteId);
+                setPendingDeleteId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <BottomNav />
     </div>
   );
