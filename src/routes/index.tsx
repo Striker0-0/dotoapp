@@ -373,18 +373,24 @@ function Composer({ onClose }: { onClose: () => void }) {
           <X className="size-4 text-muted-foreground" />
         </button>
       </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {(["Once", "Repetitive"] as const).map((r) => (
-          <Chip key={r} on={recurrence === r} onClick={() => setRecurrence(r)}>
-            {r}
-          </Chip>
-        ))}
-        <span className="mx-1 w-px bg-border" />
-        {(["Simple", "Time", "Count"] as const).map((t) => (
-          <Chip key={t} on={baseType === t} onClick={() => setBaseType(t)}>
-            {t}
-          </Chip>
-        ))}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="flex shrink-0 gap-1.5">
+          {(["Once", "Repetitive"] as const).map((r) => (
+            <Chip key={r} on={recurrence === r} onClick={() => setRecurrence(r)}>
+              {r}
+            </Chip>
+          ))}
+        </div>
+
+        <span className="mx-1 h-5 w-px shrink-0 bg-border" />
+
+        <div className="flex shrink-0 gap-1.5">
+          {(["Simple", "Time", "Count"] as const).map((t) => (
+            <Chip key={t} on={baseType === t} onClick={() => setBaseType(t)}>
+              {t}
+            </Chip>
+          ))}
+        </div>
       </div>
       {recurrence === "Repetitive" && parentOptions.length > 0 && (
         <select
