@@ -1,9 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ListTodo, Sun } from "lucide-react";
+import { ListTodo, Sparkles, Sun } from "lucide-react";
 
 const tabs = [
   { to: "/", label: "All Tasks", Icon: ListTodo },
   { to: "/my-day", label: "My Day", Icon: Sun },
+  { to: "/settings", label: "Gemini", Icon: Sparkles },
 ] as const;
 
 export function BottomNav() {
