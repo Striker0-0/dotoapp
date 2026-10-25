@@ -18,7 +18,7 @@ function Settings() {
       <header className="mb-8">
         <h1 className="text-[28px] font-medium tracking-tight">Gemini</h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          Let Gemini suggest your day. Nothing changes until you apply it.
+          Chat, send photos or PDFs, and let Gemini plan your tasks. Nothing changes until you tap Apply.
         </p>
       </header>
       <GeminiSync />
