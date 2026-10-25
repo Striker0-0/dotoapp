@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { dayKey, type DailyTask, type GlobalTask, type TrackingType } from "@/lib/store";
+import {
+  dayKey,
+  formatMinutes,
+  type DailyTask,
+  type GlobalTask,
+  type TrackingType,
+} from "@/lib/store";
 
 /**
  * Gemini chat helpers: API key storage, task context, multi-turn chat with
@@ -10,7 +16,6 @@ import { dayKey, type DailyTask, type GlobalTask, type TrackingType } from "@/li
 const KEY_NAME = "doto_gemini_api_key";
 /** Tried in order. Later models are used when earlier ones are busy. */
 export const MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"] as const;
-const REQUEST_TIMEOUT_MS = 180_000;
 const endpoint = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
@@ -145,6 +150,7 @@ You also get the user's current tasks as JSON (below). You can change their task
 - add_to_my_day: plan an existing open task for today. targetValue is minutes for "Time" tasks, reps for "Count" tasks, ignored for "Simple".
 - add_task: create a new task (dueDate YYYY-MM-DD, only for "Once" tasks; leave empty otherwise).
 - complete_task: mark an open task finished, only if the user says it is done.
+- get_logged_time: look up how much was logged for a task between two dates (inclusive). Use it for ANY question about past totals, time spent, or counts. Never add numbers yourself; report the numbers the tool returns. Convert dates the user writes (day/month, e.g. 15/10) to YYYY-MM-DD; assume the current year unless told otherwise. It also finds completed tasks.
 - remove_from_my_day: take a task off today's plan. The task and its history stay. Prefer this when the user just does not want it today.
 - remove_task: delete a task permanently, with its subtasks and history. Use only when the user clearly asks to delete it.
 Rules:
@@ -193,6 +199,21 @@ const TOOLS = [
         },
       },
       {
+        name: "get_logged_time",
+        description:
+          "Total logged for tasks between two dates (inclusive), with a per-day breakdown. Searches all tasks, including completed ones.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "part of the task title, case-insensitive" },
+            taskId: { type: "STRING", description: "exact id, if known" },
+            from: { type: "STRING", description: "YYYY-MM-DD" },
+            to: { type: "STRING", description: "YYYY-MM-DD" },
+          },
+          required: ["from", "to"],
+        },
+      },
+      {
         name: "remove_from_my_day",
         description: "Take a task off today's plan. Keeps the task and its history.",
         parameters: {
@@ -222,6 +243,80 @@ const addTaskArgs = z.object({
   dueDate: z.string().optional(),
 });
 const completeArgs = z.object({ taskId: z.string() });
+const loggedArgs = z.object({
+  query: z.string().optional(),
+  taskId: z.string().optional(),
+  from: z.string(),
+  to: z.string(),
+});
+
+/** "2026-10-5" or "2026-10-05" -> 20261005, NaN if not a date. */
+function dateNum(s: string): number {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s.trim());
+  return m ? Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]) : NaN;
+}
+
+function dateLabel(n: number): string {
+  const y = Math.floor(n / 10000);
+  const mo = Math.floor((n % 10000) / 100);
+  const d = n % 100;
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Sums history for matching tasks between two dates. Done in code, not by the model. */
+function loggedTime(
+  args: z.infer<typeof loggedArgs>,
+  all: GlobalTask[],
+): Record<string, unknown> | string {
+  const from = dateNum(args.from);
+  const to = dateNum(args.to);
+  if (Number.isNaN(from) || Number.isNaN(to)) return "error: dates must be YYYY-MM-DD";
+  if (from > to) return "error: from is after to";
+
+  const q = args.query?.trim().toLowerCase() ?? "";
+  if (!q && !args.taskId) return "error: give a query or taskId";
+  const matched = all.filter(
+    (g) => g.id === args.taskId || (q !== "" && g.title.toLowerCase().includes(q)),
+  );
+  if (matched.length === 0) return "error: no task matches";
+
+  const report = (g: GlobalTask) => {
+    const days = new Map<number, number>();
+    for (const e of g.history) {
+      const n = dateNum(e.date);
+      if (Number.isNaN(n) || n < from || n > to) continue;
+      days.set(n, (days.get(n) ?? 0) + e.amountLogged);
+    }
+    const total = round2([...days.values()].reduce((a, b) => a + b, 0));
+    return {
+      taskId: g.id,
+      title: g.title,
+      unit: UNIT[g.baseType],
+      total,
+      ...(g.baseType === "Time" ? { totalText: formatMinutes(total) } : {}),
+      daysWithEntries: days.size,
+      perDay: [...days.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([n, v]) => ({ date: dateLabel(n), amount: round2(v) })),
+      completed: g.isGloballyCompleted,
+    };
+  };
+
+  // A parent's subtasks are reported as their own rows.
+  const rows = new Map<string, GlobalTask>();
+  for (const g of matched) {
+    rows.set(g.id, g);
+    for (const c of all) if (c.parentId === g.id) rows.set(c.id, c);
+  }
+  return {
+    from: dateLabel(from),
+    to: dateLabel(to),
+    note: "A day starts at 04:00 local time. Entries only exist for days something was logged.",
+    tasks: [...rows.values()].map(report),
+  };
+}
 
 /** Validates one tool call against live tasks and queues it. Returns the tool result text. */
 function handleCall(
@@ -232,7 +327,12 @@ function handleCall(
   proposal: Proposal,
   dailyByTask: Map<string, string>,
   allTasks: GlobalTask[],
-): string {
+): Record<string, unknown> | string {
+  if (name === "get_logged_time") {
+    const r = loggedArgs.safeParse(args);
+    if (!r.success) return "error: invalid arguments";
+    return loggedTime(r.data, allTasks);
+  }
   if (name === "add_to_my_day") {
     const r = addDayArgs.safeParse(args);
     if (!r.success) return "error: invalid arguments";
@@ -329,38 +429,22 @@ async function callModel(
   context: string,
   signal?: AbortSignal,
 ): Promise<Part[]> {
-  // Own abort controller so a hung request ends with a clear message.
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
-  const onAbort = () => ctl.abort();
-  signal?.addEventListener("abort", onAbort);
-
-  let res: Response;
-  try {
-    res = await fetch(endpoint(model), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      signal: ctl.signal,
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent data:\n${context}` }] },
-        contents: history,
-        tools: TOOLS,
-        // Default is "high", which is slow for chat. "minimal" is not supported on 3.8.
-        // Flash-Lite already thinks little, so it gets no override.
-        ...(model.includes("lite")
-          ? {}
-          : { generationConfig: { thinkingConfig: { thinkingLevel: "low" } } }),
-      }),
-    });
-  } catch (e) {
-    if (ctl.signal.aborted && !signal?.aborted) {
-      throw new Error("Gemini took longer than 3 minutes. Try again.");
-    }
-    throw e;
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onAbort);
-  }
+  // No timeout: the user can press Stop.
+  const res = await fetch(endpoint(model), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    ...(signal ? { signal } : {}),
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent data:\n${context}` }] },
+      contents: history,
+      tools: TOOLS,
+      // Default is "high", which is slow for chat. "minimal" is not supported on 3.8.
+      // Flash-Lite already thinks little, so it gets no override.
+      ...(model.includes("lite")
+        ? {}
+        : { generationConfig: { thinkingConfig: { thinkingLevel: "low" } } }),
+    }),
+  });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new GeminiHttpError(res.status, extractError(body, res.status));
 
@@ -497,10 +581,11 @@ export async function sendChat(opts: {
     const responses: Part[] = calls.map((p) => {
       const call = p["functionCall"] as { name?: string; args?: unknown };
       const name = call.name ?? "";
+      const out = handleCall(name, call.args, open, planned, proposal, dailyByTask, opts.globalTasks);
       return {
         functionResponse: {
           name,
-          response: { result: handleCall(name, call.args, open, planned, proposal, dailyByTask, opts.globalTasks) },
+          response: typeof out === "string" ? { result: out } : out,
         },
       };
     });
