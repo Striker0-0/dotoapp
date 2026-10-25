@@ -10,6 +10,7 @@ import {
   fileToAttachment,
   getApiKey,
   isProposalEmpty,
+  MODELS,
   partImages,
   partText,
   saveApiKey,
@@ -185,7 +186,7 @@ export function GeminiSync() {
 
   const flash = (msg: string) => {
     setNotice(msg);
-    setTimeout(() => setNotice(""), 3000);
+    setTimeout(() => setNotice(""), 5000);
   };
 
   const onSaveKey = async () => {
@@ -245,6 +246,7 @@ export function GeminiSync() {
         signal: controller.signal,
       });
       setHistory(result.history);
+      if (result.model !== MODELS[0]) flash(`${MODELS[0]} was busy, answered by ${result.model}.`);
       setProposal(isProposalEmpty(result.proposal) ? null : result.proposal);
     } catch (e) {
       // Stopped by the user: give the message back, say nothing. New chat clears abort.current.

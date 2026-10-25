@@ -8,9 +8,11 @@ import { dayKey, type DailyTask, type GlobalTask, type TrackingType } from "@/li
  */
 
 const KEY_NAME = "doto_gemini_api_key";
-export const GEMINI_MODEL = "gemini-3.8-flash";
+/** Tried in order. Later models are used when earlier ones are busy. */
+export const MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"] as const;
 const REQUEST_TIMEOUT_MS = 60_000;
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const endpoint = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 // ---- API key storage -------------------------------------------------------
 // localStorage is private to the app inside the Android WebView (and to the
@@ -245,7 +247,22 @@ function extractError(body: unknown, status: number): string {
   return `Gemini request failed (${status})`;
 }
 
-async function generate(
+class GeminiHttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** Busy or rate-limited: worth retrying or switching model. */
+const isBusy = (e: unknown) =>
+  e instanceof GeminiHttpError && [429, 500, 503, 504].includes(e.status);
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callModel(
+  model: string,
   apiKey: string,
   history: ChatTurn[],
   context: string,
@@ -259,7 +276,7 @@ async function generate(
 
   let res: Response;
   try {
-    res = await fetch(ENDPOINT, {
+    res = await fetch(endpoint(model), {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       signal: ctl.signal,
@@ -267,8 +284,11 @@ async function generate(
         systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent data:\n${context}` }] },
         contents: history,
         tools: TOOLS,
-        // Default is "high", which is slow for chat. "minimal" is not supported.
-        generationConfig: { thinkingConfig: { thinkingLevel: "low" } },
+        // Default is "high", which is slow for chat. "minimal" is not supported on 3.8.
+        // Flash-Lite already thinks little, so it gets no override.
+        ...(model.includes("lite")
+          ? {}
+          : { generationConfig: { thinkingConfig: { thinkingLevel: "low" } } }),
       }),
     });
   } catch (e) {
@@ -281,7 +301,7 @@ async function generate(
     signal?.removeEventListener("abort", onAbort);
   }
   const body: unknown = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(extractError(body, res.status));
+  if (!res.ok) throw new GeminiHttpError(res.status, extractError(body, res.status));
 
   const data = body as {
     promptFeedback?: { blockReason?: string };
@@ -297,6 +317,31 @@ async function generate(
     throw new Error(`Gemini returned an empty response${candidate?.finishReason ? ` (${candidate.finishReason})` : ""}.`);
   }
   return parts;
+}
+
+async function generate(
+  apiKey: string,
+  history: ChatTurn[],
+  context: string,
+  signal?: AbortSignal,
+): Promise<{ parts: Part[]; model: string }> {
+  let lastError: unknown;
+  for (const model of MODELS) {
+    // One retry per model when it is just busy.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return { parts: await callModel(model, apiKey, history, context, signal), model };
+      } catch (e) {
+        if (!isBusy(e)) throw e;
+        lastError = e;
+        if (signal?.aborted) throw e;
+        // 429 means this model's quota: switching model helps, waiting does not.
+        if ((e as GeminiHttpError).status === 429) break;
+        if (attempt === 0) await sleep(1500);
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Gemini is busy. Try again soon.");
 }
 
 export function partText(parts: Part[]): string {
@@ -347,6 +392,8 @@ export function forRequest(history: ChatTurn[]): ChatTurn[] {
 export interface ChatResult {
   history: ChatTurn[];
   proposal: Proposal;
+  /** Model that produced the last answer. */
+  model: string;
 }
 
 /**
@@ -375,8 +422,11 @@ export async function sendChat(opts: {
   const proposal = emptyProposal();
 
   let history: ChatTurn[] = [...opts.history, { role: "user", parts: userParts }];
+  let model: string = MODELS[0];
   for (let round = 0; round < 5; round++) {
-    const parts = await generate(opts.apiKey, forRequest(history), context, opts.signal);
+    const out = await generate(opts.apiKey, forRequest(history), context, opts.signal);
+    const parts = out.parts;
+    model = out.model;
     history = [...history, { role: "model", parts }];
 
     const calls = parts.filter((p) => p["functionCall"]);
@@ -394,7 +444,7 @@ export async function sendChat(opts: {
     });
     history = [...history, { role: "user", parts: responses }];
   }
-  return { history, proposal };
+  return { history, proposal, model };
 }
 
 // ---- Attachments -----------------------------------------------------------
