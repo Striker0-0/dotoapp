@@ -10,7 +10,7 @@ import { dayKey, type DailyTask, type GlobalTask, type TrackingType } from "@/li
 const KEY_NAME = "doto_gemini_api_key";
 /** Tried in order. Later models are used when earlier ones are busy. */
 export const MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"] as const;
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 180_000;
 const endpoint = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
@@ -293,7 +293,7 @@ async function callModel(
     });
   } catch (e) {
     if (ctl.signal.aborted && !signal?.aborted) {
-      throw new Error("Gemini took longer than 60 seconds. Try again.");
+      throw new Error("Gemini took longer than 3 minutes. Try again.");
     }
     throw e;
   } finally {
