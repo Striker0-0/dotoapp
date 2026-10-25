@@ -295,6 +295,37 @@ export function partImages(parts: Part[]): { mimeType: string; data: string }[] 
   });
 }
 
+const MAX_SENT_TURNS = 16;
+
+const isPrompt = (t: ChatTurn) =>
+  t.role === "user" && !t.parts.some((p) => p["functionResponse"]);
+
+/**
+ * Trims what is sent to Gemini (the on-screen chat stays complete): only the
+ * last few turns, starting at a real user message, and photos/PDFs only from
+ * the most recent message that had them.
+ */
+export function forRequest(history: ChatTurn[]): ChatTurn[] {
+  let start = Math.max(0, history.length - MAX_SENT_TURNS);
+  while (start < history.length && !isPrompt(history[start] as ChatTurn)) start++;
+  const window = history.slice(start);
+
+  let lastWithMedia = -1;
+  window.forEach((t, i) => {
+    if (isPrompt(t) && partImages(t.parts).length > 0) lastWithMedia = i;
+  });
+
+  return window.map((t, i) => {
+    if (i === lastWithMedia || !isPrompt(t) || partImages(t.parts).length === 0) return t;
+    return {
+      ...t,
+      parts: t.parts.map((p) =>
+        p["inlineData"] ? { text: "[earlier attachment omitted to save tokens]" } : p,
+      ),
+    };
+  });
+}
+
 export interface ChatResult {
   history: ChatTurn[];
   proposal: Proposal;
@@ -327,7 +358,7 @@ export async function sendChat(opts: {
 
   let history: ChatTurn[] = [...opts.history, { role: "user", parts: userParts }];
   for (let round = 0; round < 5; round++) {
-    const parts = await generate(opts.apiKey, history, context, opts.signal);
+    const parts = await generate(opts.apiKey, forRequest(history), context, opts.signal);
     history = [...history, { role: "model", parts }];
 
     const calls = parts.filter((p) => p["functionCall"]);
