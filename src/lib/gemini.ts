@@ -9,6 +9,7 @@ import { dayKey, type DailyTask, type GlobalTask, type TrackingType } from "@/li
 
 const KEY_NAME = "doto_gemini_api_key";
 export const GEMINI_MODEL = "gemini-3.8-flash";
+const REQUEST_TIMEOUT_MS = 60_000;
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ---- API key storage -------------------------------------------------------
@@ -250,18 +251,35 @@ async function generate(
   context: string,
   signal?: AbortSignal,
 ): Promise<Part[]> {
-  const init: RequestInit = {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent data:\n${context}` }] },
-      contents: history,
-      tools: TOOLS,
-    }),
-  };
-  if (signal) init.signal = signal;
+  // Own abort controller so a hung request ends with a clear message.
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener("abort", onAbort);
 
-  const res = await fetch(ENDPOINT, init);
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      signal: ctl.signal,
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent data:\n${context}` }] },
+        contents: history,
+        tools: TOOLS,
+        // Default is "high", which is slow for chat. "minimal" is not supported.
+        generationConfig: { thinkingConfig: { thinkingLevel: "low" } },
+      }),
+    });
+  } catch (e) {
+    if (ctl.signal.aborted && !signal?.aborted) {
+      throw new Error("Gemini took longer than 60 seconds. Try again.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new Error(extractError(body, res.status));
 

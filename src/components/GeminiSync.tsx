@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, FileText, Loader2, Paperclip, Send, Trash2, X } from "lucide-react";
+import { Check, Copy, FileText, Loader2, Paperclip, Send, Square, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -247,7 +247,14 @@ export function GeminiSync() {
       setHistory(result.history);
       setProposal(isProposalEmpty(result.proposal) ? null : result.proposal);
     } catch (e) {
-      if (controller.signal.aborted) return;
+      // Stopped by the user: give the message back, say nothing. New chat clears abort.current.
+      if (controller.signal.aborted) {
+        if (abort.current === controller) {
+          setDraft(text);
+          setAttachments(sent);
+        }
+        return;
+      }
       setError(e instanceof Error ? e.message : "Something went wrong.");
       // Give the message back so nothing is lost.
       setDraft(text);
@@ -275,8 +282,11 @@ export function GeminiSync() {
     flash("Applied. Check All Tasks and My Day.");
   };
 
+  const onStop = () => abort.current?.abort();
+
   const onNewChat = () => {
     abort.current?.abort();
+    abort.current = null;
     setHistory([]);
     setProposal(null);
     setAttachments([]);
@@ -406,14 +416,20 @@ export function GeminiSync() {
             rows={1}
             className="min-h-10 flex-1 resize-none"
           />
-          <Button
-            size="icon"
-            onClick={onSend}
-            disabled={busy || !apiKey.trim() || (!draft.trim() && attachments.length === 0)}
-            aria-label="Send"
-          >
-            <Send className="size-4" />
-          </Button>
+          {busy ? (
+            <Button size="icon" variant="outline" onClick={onStop} aria-label="Stop">
+              <Square className="size-4" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              onClick={onSend}
+              disabled={!apiKey.trim() || (!draft.trim() && attachments.length === 0)}
+              aria-label="Send"
+            >
+              <Send className="size-4" />
+            </Button>
+          )}
         </div>
       </section>
     </div>
