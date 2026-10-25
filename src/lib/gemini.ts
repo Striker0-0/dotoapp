@@ -8,7 +8,7 @@ import { dayKey, type DailyTask, type GlobalTask, type TrackingType } from "@/li
  */
 
 const KEY_NAME = "doto_gemini_api_key";
-export const GEMINI_MODEL = "gemini-2.5-flash";
+export const GEMINI_MODEL = "gemini-3.8-flash";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ---- API key storage -------------------------------------------------------
