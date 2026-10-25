@@ -1,4 +1,3 @@
-import { Preferences } from "@capacitor/preferences";
 import { z } from "zod";
 import { dayKey, type DailyTask, type GlobalTask, type TrackingType } from "@/lib/store";
 
@@ -13,20 +12,27 @@ export const GEMINI_MODEL = "gemini-2.5-flash";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ---- API key storage -------------------------------------------------------
-// Capacitor Preferences uses app-private storage on Android and falls back to
-// localStorage in the browser. It is private to the app, not hardware-encrypted.
+// localStorage is private to the app inside the Android WebView (and to the
+// origin in a browser). It is not hardware-encrypted.
+
+function storage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
 
 export async function getApiKey(): Promise<string> {
-  const { value } = await Preferences.get({ key: KEY_NAME });
-  return value ?? "";
+  return storage()?.getItem(KEY_NAME) ?? "";
 }
 
 export async function saveApiKey(value: string): Promise<void> {
-  await Preferences.set({ key: KEY_NAME, value: value.trim() });
+  storage()?.setItem(KEY_NAME, value.trim());
 }
 
 export async function clearApiKey(): Promise<void> {
-  await Preferences.remove({ key: KEY_NAME });
+  storage()?.removeItem(KEY_NAME);
 }
 
 // ---- Payload ---------------------------------------------------------------
