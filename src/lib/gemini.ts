@@ -119,18 +119,34 @@ export interface Proposal {
     expiresAt?: string;
   }[];
   complete: GlobalTask[];
+  /** Take a task off today's plan only. The task and its history stay. */
+  removeFromDay: { task: GlobalTask; dailyId: string }[];
+  /** Permanent delete, including subtasks, today's entry and history. */
+  deleteTasks: { task: GlobalTask; subtaskCount: number }[];
 }
 
-export const emptyProposal = (): Proposal => ({ myDay: [], newTasks: [], complete: [] });
+export const emptyProposal = (): Proposal => ({
+  myDay: [],
+  newTasks: [],
+  complete: [],
+  removeFromDay: [],
+  deleteTasks: [],
+});
 
 export const isProposalEmpty = (p: Proposal) =>
-  p.myDay.length === 0 && p.newTasks.length === 0 && p.complete.length === 0;
+  p.myDay.length === 0 &&
+  p.newTasks.length === 0 &&
+  p.complete.length === 0 &&
+  p.removeFromDay.length === 0 &&
+  p.deleteTasks.length === 0;
 
 const SYSTEM_PROMPT = `You are the assistant inside a minimalist to-do app. Chat naturally and answer anything the user asks, including questions about photos or PDFs they send.
 You also get the user's current tasks as JSON (below). You can change their tasks only by calling the tools:
 - add_to_my_day: plan an existing open task for today. targetValue is minutes for "Time" tasks, reps for "Count" tasks, ignored for "Simple".
 - add_task: create a new task (dueDate YYYY-MM-DD, only for "Once" tasks; leave empty otherwise).
 - complete_task: mark an open task finished, only if the user says it is done.
+- remove_from_my_day: take a task off today's plan. The task and its history stay. Prefer this when the user just does not want it today.
+- remove_task: delete a task permanently, with its subtasks and history. Use only when the user clearly asks to delete it.
 Rules:
 - Only use task ids that appear in "tasks". Never invent ids.
 - Use tools only when the user wants their tasks or day changed. A photo of a list or notes can be turned into add_task calls if the user asks.
@@ -176,6 +192,24 @@ const TOOLS = [
           required: ["taskId"],
         },
       },
+      {
+        name: "remove_from_my_day",
+        description: "Take a task off today's plan. Keeps the task and its history.",
+        parameters: {
+          type: "OBJECT",
+          properties: { taskId: { type: "STRING", description: "id from tasks" } },
+          required: ["taskId"],
+        },
+      },
+      {
+        name: "remove_task",
+        description: "Permanently delete a task with its subtasks and history.",
+        parameters: {
+          type: "OBJECT",
+          properties: { taskId: { type: "STRING", description: "id from tasks" } },
+          required: ["taskId"],
+        },
+      },
     ],
   },
 ];
@@ -196,6 +230,8 @@ function handleCall(
   open: Map<string, GlobalTask>,
   planned: Set<string>,
   proposal: Proposal,
+  dailyByTask: Map<string, string>,
+  allTasks: GlobalTask[],
 ): string {
   if (name === "add_to_my_day") {
     const r = addDayArgs.safeParse(args);
@@ -235,6 +271,31 @@ function handleCall(
     if (!task) return "error: unknown or completed task id";
     if (!proposal.complete.some((t) => t.id === task.id)) proposal.complete.push(task);
     return "queued, waiting for user approval";
+  }
+  if (name === "remove_from_my_day") {
+    const r = completeArgs.safeParse(args);
+    if (!r.success) return "error: invalid arguments";
+    const task = open.get(r.data.taskId);
+    const dailyId = dailyByTask.get(r.data.taskId);
+    if (!task) return "error: unknown task id";
+    if (!dailyId) return "skipped: not planned for today";
+    if (!proposal.removeFromDay.some((x) => x.task.id === task.id)) {
+      proposal.removeFromDay.push({ task, dailyId });
+    }
+    return "queued, waiting for user approval";
+  }
+  if (name === "remove_task") {
+    const r = completeArgs.safeParse(args);
+    if (!r.success) return "error: invalid arguments";
+    const task = open.get(r.data.taskId);
+    if (!task) return "error: unknown task id";
+    if (!proposal.deleteTasks.some((x) => x.task.id === task.id)) {
+      proposal.deleteTasks.push({
+        task,
+        subtaskCount: allTasks.filter((g) => g.parentId === task.id).length,
+      });
+    }
+    return "queued, waiting for user approval to delete permanently";
   }
   return "error: unknown tool";
 }
@@ -419,6 +480,7 @@ export async function sendChat(opts: {
     opts.globalTasks.filter((g) => !g.isGloballyCompleted).map((g) => [g.id, g] as const),
   );
   const planned = new Set(opts.dailyTasks.map((d) => d.globalTaskId));
+  const dailyByTask = new Map(opts.dailyTasks.map((d) => [d.globalTaskId, d.id] as const));
   const proposal = emptyProposal();
 
   let history: ChatTurn[] = [...opts.history, { role: "user", parts: userParts }];
@@ -438,7 +500,7 @@ export async function sendChat(opts: {
       return {
         functionResponse: {
           name,
-          response: { result: handleCall(name, call.args, open, planned, proposal) },
+          response: { result: handleCall(name, call.args, open, planned, proposal, dailyByTask, opts.globalTasks) },
         },
       };
     });

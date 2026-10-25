@@ -142,9 +142,47 @@ function ProposalCard({
         </div>
       )}
 
+      {proposal.removeFromDay.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1 text-xs text-muted-foreground">Take off My Day</p>
+          <ul className="divide-y divide-border">
+            {proposal.removeFromDay.map((x) => (
+              <li key={x.task.id} className="py-1.5 text-sm">
+                {x.task.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {proposal.deleteTasks.length > 0 && (
+        <div className="mb-3 rounded-lg border border-destructive/50 p-3">
+          <p className="mb-1 text-xs font-medium text-destructive">
+            Delete permanently (no undo)
+          </p>
+          <ul className="divide-y divide-border">
+            {proposal.deleteTasks.map((x) => (
+              <li key={x.task.id} className="py-1.5 text-sm">
+                {x.task.title}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {x.subtaskCount > 0
+                    ? `also deletes ${x.subtaskCount} subtask${x.subtaskCount > 1 ? "s" : ""} and history`
+                    : "and its history"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="flex gap-2">
-        <Button onClick={onApply} className="flex-1">
-          <Check className="size-4" /> Apply
+        <Button
+          onClick={onApply}
+          variant={proposal.deleteTasks.length > 0 ? "destructive" : "default"}
+          className="flex-1"
+        >
+          <Check className="size-4" />{" "}
+          {proposal.deleteTasks.length > 0 ? "Apply and delete" : "Apply"}
         </Button>
         <Button variant="outline" onClick={onDiscard}>
           <X className="size-4" /> Discard
@@ -280,6 +318,8 @@ export function GeminiSync() {
       }),
     );
     proposal.myDay.forEach((m) => s.addToMyDay(m.task.id, m.task.baseType, m.targetValue));
+    proposal.removeFromDay.forEach((x) => s.removeDailyTask(x.dailyId));
+    proposal.deleteTasks.forEach((x) => s.removeGlobalTask(x.task.id));
     setProposal(null);
     flash("Applied. Check All Tasks and My Day.");
   };
