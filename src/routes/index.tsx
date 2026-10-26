@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
@@ -24,6 +24,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { DayEditor } from "@/components/DayEditor";
+import { GoalPicker } from "@/components/GoalPicker";
+import { GoalProgress } from "@/components/GoalProgress";
+import { Heatmap } from "@/components/Heatmap";
 import { useLongPress } from "@/components/useLongPress";
 import { useDailyReset } from "@/components/useDailyReset";
 import { useHydrated } from "@/components/useHydrated";
@@ -31,13 +35,14 @@ import {
   aggregatedHistory,
   dayKey,
   formatMinutes,
-  recentDayKeys,
   useStore,
   type GlobalTask,
   type HistoryEntry,
   type Recurrence,
   type TrackingType,
+  type WeeklyGoal,
 } from "@/lib/store";
+import { cleanGoal, dailyTotals, formatAmount, progressLabel, weekProgress } from "@/lib/stats";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -83,12 +88,17 @@ function TaskRow({
       ? task.history.reduce((total, entry) => total + entry.amountLogged, 0)
       : 0;
 
+  const wp = !isParent && task.recurrence === "Repetitive" && task.weeklyGoal ? weekProgress(task) : null;
+  const goalText = wp ? `${progressLabel(task, wp)} this week${wp.met ? " ✓" : ""}` : "";
+
   const subtitle =
     task.recurrence === "Once"
       ? `${task.baseType} · ${formatDateDDMMYYYY(task.expiresAt)}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} logged` : ""}`
       : isParent
         ? "Major task"
-        : task.baseType;
+        : goalText
+          ? `${task.baseType} · ${goalText}`
+          : task.baseType;
 
   return (
     <motion.li
@@ -193,55 +203,6 @@ function entriesForPeriod(history: HistoryEntry[], period: StatsPeriod) {
   });
 }
 
-function HistoryEditor({ task }: { task: GlobalTask }) {
-  const updateHistoryEntry = useStore((s) => s.updateHistoryEntry);
-  const removeHistoryEntry = useStore((s) => s.removeHistoryEntry);
-  const days = recentDayKeys();
-  const entries = task.history.filter((e) => days.includes(e.date));
-
-  return (
-    <div className="mt-2">
-      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-        Edit last 48 hours
-      </p>
-      {entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing logged in the last 3 days.</p>
-      ) : (
-        <ul className="space-y-2">
-          {entries.map((entry) => (
-            <li key={entry.id} className="flex items-center gap-2">
-              <span className="flex-1 text-xs text-muted-foreground">
-                {entry.date === days[0] ? "Today" : entry.date === days[1] ? "Yesterday" : formatDateDDMMYYYY(entry.date)}
-              </span>
-              <Input
-                type="number"
-                min="0"
-                inputMode="numeric"
-                aria-label={`Amount logged on ${entry.date}`}
-                value={String(Math.round(entry.amountLogged))}
-                onChange={(e) =>
-                  updateHistoryEntry(task.id, entry.id, Math.max(0, Number(e.target.value) || 0))
-                }
-                className="h-8 w-24 px-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield]"
-              />
-              <span className="w-10 text-xs text-muted-foreground">
-                {task.baseType === "Time" ? "min" : task.baseType === "Count" ? "reps" : "done"}
-              </span>
-              <button
-                onClick={() => removeHistoryEntry(task.id, entry.id)}
-                aria-label="Delete entry"
-                className="text-muted-foreground/70 hover:text-foreground"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function TaskStats({
   task,
   allTasks,
@@ -252,6 +213,8 @@ function TaskStats({
   onClose: () => void;
 }) {
   const periods: StatsPeriod[] = ["Total", "Yearly", "Monthly", "Weekly"];
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  useEffect(() => setSelectedDay(null), [task?.id]);
   const children = task ? allTasks.filter((g) => g.parentId === task.id) : [];
   const isParent = children.length > 0;
   const history = task ? aggregatedHistory(task, allTasks) : [];
@@ -279,6 +242,31 @@ function TaskStats({
         </DialogHeader>
         {task && (
           <>
+            {!isParent && task.recurrence === "Repetitive" && task.weeklyGoal && (
+              <GoalProgress task={task} />
+            )}
+            <div>
+              <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Daily
+              </p>
+              <Heatmap
+                values={dailyTotals(history)}
+                format={(n) =>
+                  formatAmount(
+                    isParent ? (children.some((c) => c.baseType === "Time") ? "Time" : "Count") : task.baseType,
+                    n,
+                  )
+                }
+                selected={selectedDay}
+                onSelect={(d) => setSelectedDay((cur) => (cur === d ? null : d))}
+              />
+              {selectedDay && !isParent && <DayEditor task={task} date={selectedDay} />}
+              {selectedDay && isParent && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Open a subtask to edit its days.
+                </p>
+              )}
+            </div>
             <div className="divide-y divide-border">
               {periods.map((period) => {
                 const entries = entriesForPeriod(history, period);
@@ -309,7 +297,6 @@ function TaskStats({
                 );
               })}
             </div>
-            {!isParent && <HistoryEditor task={task} />}
           </>
         )}
       </DialogContent>
@@ -324,6 +311,7 @@ function Composer({ onClose }: { onClose: () => void }) {
   const [recurrence, setRecurrence] = useState<Recurrence>("Once");
   const [baseType, setBaseType] = useState<TrackingType>("Simple");
   const [parentId, setParentId] = useState<string>("");
+  const [goal, setGoal] = useState<WeeklyGoal | null>(null);
   const [hasExpiration, setHasExpiration] = useState(false);
   const [expiresAt, setExpiresAt] = useState(new Date().toISOString().slice(0, 10));
 
@@ -339,6 +327,9 @@ function Composer({ onClose }: { onClose: () => void }) {
       baseType,
       parentId: recurrence === "Repetitive" && parentId ? parentId : null,
       ...(recurrence === "Once" && hasExpiration && expiresAt ? { expiresAt } : {}),
+      ...(recurrence === "Repetitive" && cleanGoal(goal, baseType)
+        ? { weeklyGoal: cleanGoal(goal, baseType) }
+        : {}),
     });
     onClose();
   };
@@ -402,6 +393,11 @@ function Composer({ onClose }: { onClose: () => void }) {
           ))}
         </select>
       )}
+      {recurrence === "Repetitive" && (
+        <div className="mt-3">
+          <GoalPicker baseType={baseType} value={goal} onChange={setGoal} />
+        </div>
+      )}
       {recurrence === "Once" && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <Chip on={hasExpiration} onClick={() => setHasExpiration(true)}>
@@ -436,9 +432,12 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
   const [hasExpiration, setHasExpiration] = useState(false);
   const [expiresAt, setExpiresAt] = useState("");
   const [baseType, setBaseType] = useState<TrackingType>("Simple");
+  const [goal, setGoal] = useState<WeeklyGoal | null>(null);
+  const hasChildren = useStore((s) => (task ? s.globalTasks.some((g) => g.parentId === task.id) : false));
 
   useMemo(() => {
     if (task) {
+      setGoal(task.weeklyGoal ?? null);
       setTitle(task.title);
       setHasExpiration(Boolean(task.expiresAt));
       setExpiresAt(task.expiresAt || new Date().toISOString().slice(0, 10));
@@ -454,6 +453,9 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
       title: title.trim(),
       baseType,
       expiresAt: task.recurrence === "Once" && hasExpiration && expiresAt ? expiresAt : undefined,
+      ...(task.recurrence === "Repetitive" && !hasChildren
+        ? { weeklyGoal: cleanGoal(goal, baseType) }
+        : {}),
     });
     onClose();
   };
@@ -485,6 +487,10 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
               <option value="Count" className="bg-card text-foreground">Count</option>
             </select>
           </div>
+
+          {task.recurrence === "Repetitive" && !hasChildren && (
+            <GoalPicker baseType={baseType} value={goal} onChange={setGoal} />
+          )}
 
           {task.recurrence === "Once" && (
             <div>

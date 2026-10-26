@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useStore } from "@/lib/store";
+import { goalLabel } from "@/lib/stats";
 import {
   buildPayload,
   clearApiKey,
@@ -149,6 +150,22 @@ function ProposalCard({
             {proposal.removeFromDay.map((x) => (
               <li key={x.task.id} className="py-1.5 text-sm">
                 {x.task.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {proposal.setGoals.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1 text-xs text-muted-foreground">Weekly goals</p>
+          <ul className="divide-y divide-border">
+            {proposal.setGoals.map((x) => (
+              <li key={x.task.id} className="py-1.5 text-sm">
+                {x.task.title}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {x.goal ? goalLabel(x.goal, x.task.baseType) : "remove goal"}
+                </span>
               </li>
             ))}
           </ul>
@@ -318,6 +335,7 @@ export function GeminiSync() {
       }),
     );
     proposal.myDay.forEach((m) => s.addToMyDay(m.task.id, m.task.baseType, m.targetValue));
+    proposal.setGoals.forEach((x) => s.updateGlobalTask(x.task.id, { weeklyGoal: x.goal }));
     proposal.removeFromDay.forEach((x) => s.removeDailyTask(x.dailyId));
     proposal.deleteTasks.forEach((x) => s.removeGlobalTask(x.task.id));
     setProposal(null);

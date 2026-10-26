@@ -5,7 +5,19 @@ import {
   type DailyTask,
   type GlobalTask,
   type TrackingType,
+  type WeeklyGoal,
 } from "@/lib/store";
+import {
+  cleanGoal,
+  dailyTotals,
+  goalLabel,
+  mergeTotals,
+  normDate,
+  round2,
+  sumRange,
+  weekBounds,
+  weekProgress,
+} from "@/lib/stats";
 
 /**
  * Gemini chat helpers: API key storage, task context, multi-turn chat with
@@ -57,6 +69,11 @@ const UNIT: Record<TrackingType, string> = {
   Count: "reps",
 };
 
+function weekSummary(g: GlobalTask) {
+  const p = weekProgress(g);
+  return { days: p.days, amount: p.amount, ...(p.goal ? { goalMet: p.met } : {}) };
+}
+
 export function buildPayload(globalTasks: GlobalTask[], dailyTasks: DailyTask[]) {
   const now = Date.now();
   const lastWeek = new Set(
@@ -67,7 +84,8 @@ export function buildPayload(globalTasks: GlobalTask[], dailyTasks: DailyTask[])
   return {
     app: "dotoapp",
     today: localIsoDate(),
-    note: "A day starts at 04:00 local time. Time tasks are tracked in minutes.",
+    note: "A day starts at 04:00 local time. Time tasks are tracked in minutes. Weeks run Monday to Sunday.",
+    thisWeek: weekBounds(0),
     tasks: globalTasks
       .filter((g) => !g.isGloballyCompleted)
       .map((g) => ({
@@ -83,6 +101,8 @@ export function buildPayload(globalTasks: GlobalTask[], dailyTasks: DailyTask[])
             .filter((e) => lastWeek.has(e.date))
             .reduce((sum, e) => sum + e.amountLogged, 0),
         ),
+        weeklyGoal: g.weeklyGoal ?? null,
+        ...(g.recurrence === "Repetitive" ? { thisWeekProgress: weekSummary(g) } : {}),
       })),
     myDayToday: dailyTasks.map((d) => ({
       taskId: d.globalTaskId,
@@ -128,6 +148,8 @@ export interface Proposal {
   removeFromDay: { task: GlobalTask; dailyId: string }[];
   /** Permanent delete, including subtasks, today's entry and history. */
   deleteTasks: { task: GlobalTask; subtaskCount: number }[];
+  /** Set (or clear, with null) a weekly goal. */
+  setGoals: { task: GlobalTask; goal: WeeklyGoal | null }[];
 }
 
 export const emptyProposal = (): Proposal => ({
@@ -136,6 +158,7 @@ export const emptyProposal = (): Proposal => ({
   complete: [],
   removeFromDay: [],
   deleteTasks: [],
+  setGoals: [],
 });
 
 export const isProposalEmpty = (p: Proposal) =>
@@ -143,14 +166,17 @@ export const isProposalEmpty = (p: Proposal) =>
   p.newTasks.length === 0 &&
   p.complete.length === 0 &&
   p.removeFromDay.length === 0 &&
-  p.deleteTasks.length === 0;
+  p.deleteTasks.length === 0 &&
+  p.setGoals.length === 0;
 
 const SYSTEM_PROMPT = `You are the assistant inside a minimalist to-do app. Chat naturally and answer anything the user asks, including questions about photos or PDFs they send.
 You also get the user's current tasks as JSON (below). You can change their tasks only by calling the tools:
 - add_to_my_day: plan an existing open task for today. targetValue is minutes for "Time" tasks, reps for "Count" tasks, ignored for "Simple".
 - add_task: create a new task (dueDate YYYY-MM-DD, only for "Once" tasks; leave empty otherwise).
 - complete_task: mark an open task finished, only if the user says it is done.
-- get_logged_time: look up how much was logged for a task between two dates (inclusive). Use it for ANY question about past totals, time spent, or counts. Never add numbers yourself; report the numbers the tool returns. Convert dates the user writes (day/month, e.g. 15/10) to YYYY-MM-DD; assume the current year unless told otherwise. It also finds completed tasks.
+- get_logged_time: look up how much was logged for a task between two dates (inclusive). Use it for ANY question about past totals, time spent, or counts. Never add numbers yourself; report the numbers the tool returns. Convert dates the user writes (day/month, e.g. 15/10) to YYYY-MM-DD; assume the current year unless told otherwise. It also finds completed tasks. Leave query and taskId empty to total across ALL tasks; the result then has a timeTotal for Time tasks. For ranges over 62 days it returns monthly totals instead of daily.
+- get_goal_progress: how the user did against weekly goals, week by week (Monday to Sunday). Use it for any question about goals; do not work it out yourself.
+- set_weekly_goal: set or clear a weekly goal on a repetitive task (kind "days" with target 1-7, kind "amount" with minutes or reps, or "none"). Not for major tasks that have subtasks.
 - remove_from_my_day: take a task off today's plan. The task and its history stay. Prefer this when the user just does not want it today.
 - remove_task: delete a task permanently, with its subtasks and history. Use only when the user clearly asks to delete it.
 Rules:
@@ -214,6 +240,35 @@ const TOOLS = [
         },
       },
       {
+        name: "get_goal_progress",
+        description:
+          "Weekly goal results for tasks that have a goal, per week (Monday-Sunday), newest last.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "part of the task title; empty for all goals" },
+            taskId: { type: "STRING" },
+            weeks: { type: "NUMBER", description: "how many weeks back, default 4, max 26" },
+          },
+        },
+      },
+      {
+        name: "set_weekly_goal",
+        description: "Set or clear the weekly goal of a repetitive task.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            taskId: { type: "STRING", description: "id from tasks" },
+            kind: { type: "STRING", enum: ["days", "amount", "none"] },
+            target: {
+              type: "NUMBER",
+              description: "days per week (1-7), or minutes (Time) / reps (Count) per week",
+            },
+          },
+          required: ["taskId", "kind"],
+        },
+      },
+      {
         name: "remove_from_my_day",
         description: "Take a task off today's plan. Keeps the task and its history.",
         parameters: {
@@ -249,72 +304,148 @@ const loggedArgs = z.object({
   from: z.string(),
   to: z.string(),
 });
+const goalProgressArgs = z.object({
+  query: z.string().optional(),
+  taskId: z.string().optional(),
+  weeks: z.number().optional(),
+});
+const setGoalArgs = z.object({
+  taskId: z.string(),
+  kind: z.enum(["days", "amount", "none"]),
+  target: z.number().optional(),
+});
 
-/** "2026-10-5" or "2026-10-05" -> 20261005, NaN if not a date. */
-function dateNum(s: string): number {
-  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s.trim());
-  return m ? Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]) : NaN;
+const daysBetween = (from: string, to: string) =>
+  Math.round(
+    (new Date(`${to}T12:00:00`).getTime() - new Date(`${from}T12:00:00`).getTime()) / 864e5,
+  ) + 1;
+
+function matchTasks(all: GlobalTask[], query?: string, taskId?: string): GlobalTask[] {
+  const q = query?.trim().toLowerCase() ?? "";
+  if (!q && !taskId) return [];
+  return all.filter((g) => g.id === taskId || (q !== "" && g.title.toLowerCase().includes(q)));
 }
 
-function dateLabel(n: number): string {
-  const y = Math.floor(n / 10000);
-  const mo = Math.floor((n % 10000) / 100);
-  const d = n % 100;
-  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
-/** Sums history for matching tasks between two dates. Done in code, not by the model. */
+/** Sums history between two dates. Done in code, not by the model. */
 function loggedTime(
   args: z.infer<typeof loggedArgs>,
   all: GlobalTask[],
 ): Record<string, unknown> | string {
-  const from = dateNum(args.from);
-  const to = dateNum(args.to);
-  if (Number.isNaN(from) || Number.isNaN(to)) return "error: dates must be YYYY-MM-DD";
+  const from = normDate(args.from);
+  const to = normDate(args.to);
+  if (!from || !to) return "error: dates must be YYYY-MM-DD";
   if (from > to) return "error: from is after to";
 
-  const q = args.query?.trim().toLowerCase() ?? "";
-  if (!q && !args.taskId) return "error: give a query or taskId";
-  const matched = all.filter(
-    (g) => g.id === args.taskId || (q !== "" && g.title.toLowerCase().includes(q)),
-  );
+  const everything = !args.query?.trim() && !args.taskId;
+  const matched = everything ? all : matchTasks(all, args.query, args.taskId);
   if (matched.length === 0) return "error: no task matches";
 
-  const report = (g: GlobalTask) => {
-    const days = new Map<number, number>();
-    for (const e of g.history) {
-      const n = dateNum(e.date);
-      if (Number.isNaN(n) || n < from || n > to) continue;
-      days.set(n, (days.get(n) ?? 0) + e.amountLogged);
-    }
-    const total = round2([...days.values()].reduce((a, b) => a + b, 0));
-    return {
-      taskId: g.id,
-      title: g.title,
-      unit: UNIT[g.baseType],
-      total,
-      ...(g.baseType === "Time" ? { totalText: formatMinutes(total) } : {}),
-      daysWithEntries: days.size,
-      perDay: [...days.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([n, v]) => ({ date: dateLabel(n), amount: round2(v) })),
-      completed: g.isGloballyCompleted,
-    };
-  };
-
-  // A parent's subtasks are reported as their own rows.
+  // A matched parent also brings its subtasks. Each task counts only its own history.
   const rows = new Map<string, GlobalTask>();
   for (const g of matched) {
     rows.set(g.id, g);
     for (const c of all) if (c.parentId === g.id) rows.set(c.id, c);
   }
+
+  const showDays = daysBetween(from, to) <= 62;
+  const breakdown = (totals: Map<string, number>) => {
+    if (showDays) {
+      return {
+        perDay: [...totals.entries()]
+          .filter(([d, v]) => d >= from && d <= to && v > 0)
+          .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+          .map(([date, amount]) => ({ date, amount })),
+      };
+    }
+    const months = new Map<string, number>();
+    for (const [d, v] of totals) {
+      if (d < from || d > to || v <= 0) continue;
+      const k = d.slice(0, 7);
+      months.set(k, round2((months.get(k) ?? 0) + v));
+    }
+    return {
+      perMonth: [...months.entries()]
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+        .map(([month, amount]) => ({ month, amount })),
+    };
+  };
+
+  const reports = [...rows.values()]
+    .map((g) => {
+      const totals = dailyTotals(g.history);
+      const { amount, days } = sumRange(totals, from, to);
+      return {
+        taskId: g.id,
+        title: g.title,
+        unit: UNIT[g.baseType],
+        total: amount,
+        ...(g.baseType === "Time" ? { totalText: formatMinutes(amount) } : {}),
+        daysWithEntries: days,
+        ...breakdown(totals),
+        completed: g.isGloballyCompleted,
+      };
+    })
+    // When totalling everything, leave out tasks with nothing in the range.
+    .filter((t) => !everything || t.total > 0);
+
+  const timeRows = [...rows.values()].filter((g) => g.baseType === "Time");
+  const timeTotals = mergeTotals(timeRows.map((g) => dailyTotals(g.history)));
+  const timeSum = sumRange(timeTotals, from, to);
+
   return {
-    from: dateLabel(from),
-    to: dateLabel(to),
+    from,
+    to,
     note: "A day starts at 04:00 local time. Entries only exist for days something was logged.",
-    tasks: [...rows.values()].map(report),
+    tasks: reports.slice(0, 40),
+    ...(reports.length > 40 ? { truncated: true, tasksTotal: reports.length } : {}),
+    ...(timeRows.length > 0
+      ? {
+          timeTotal: {
+            minutes: timeSum.amount,
+            text: formatMinutes(timeSum.amount),
+            activeDays: timeSum.days,
+            ...breakdown(timeTotals),
+          },
+        }
+      : {}),
+  };
+}
+
+function goalProgressReport(
+  args: z.infer<typeof goalProgressArgs>,
+  all: GlobalTask[],
+): Record<string, unknown> | string {
+  const weeks = Math.min(26, Math.max(1, Math.round(args.weeks ?? 4)));
+  const everything = !args.query?.trim() && !args.taskId;
+  const pool = (everything ? all : matchTasks(all, args.query, args.taskId)).filter(
+    (g) => g.weeklyGoal && !g.isGloballyCompleted,
+  );
+  if (pool.length === 0) return "error: no matching task has a weekly goal";
+
+  return {
+    note: "Weeks run Monday to Sunday. The current week is still in progress. Weeks before a task existed count as not met.",
+    tasks: pool.slice(0, 30).map((g) => {
+      const goal = g.weeklyGoal as WeeklyGoal;
+      const list = Array.from({ length: weeks }, (_, i) => weekProgress(g, weeks - 1 - i));
+      const finished = list.slice(0, -1);
+      return {
+        taskId: g.id,
+        title: g.title,
+        goal: goalLabel(goal, g.baseType),
+        goalKind: goal.kind,
+        goalTarget: goal.target,
+        weeks: list.map((w, i) => ({
+          start: w.start,
+          end: w.end,
+          days: w.days,
+          amount: w.amount,
+          met: w.met,
+          current: i === list.length - 1,
+        })),
+        finishedWeeks: finished.length,
+        finishedWeeksMet: finished.filter((w) => w.met).length,
+      };
+    }),
   };
 }
 
@@ -332,6 +463,33 @@ function handleCall(
     const r = loggedArgs.safeParse(args);
     if (!r.success) return "error: invalid arguments";
     return loggedTime(r.data, allTasks);
+  }
+  if (name === "get_goal_progress") {
+    const r = goalProgressArgs.safeParse(args);
+    if (!r.success) return "error: invalid arguments";
+    return goalProgressReport(r.data, allTasks);
+  }
+  if (name === "set_weekly_goal") {
+    const r = setGoalArgs.safeParse(args);
+    if (!r.success) return "error: invalid arguments";
+    const task = open.get(r.data.taskId);
+    if (!task) return "error: unknown or completed task id";
+    if (task.recurrence !== "Repetitive") return "error: weekly goals are only for repetitive tasks";
+    if (allTasks.some((g) => g.parentId === task.id)) {
+      return "error: this is a major task with subtasks; set goals on its subtasks";
+    }
+    let goal: WeeklyGoal | null = null;
+    if (r.data.kind === "days") {
+      goal = cleanGoal({ kind: "days", target: r.data.target ?? 0 }, task.baseType);
+    } else if (r.data.kind === "amount") {
+      goal = cleanGoal({ kind: "amount", target: r.data.target ?? 0 }, task.baseType);
+    }
+    if (r.data.kind !== "none" && !goal) {
+      return "error: invalid goal (amount goals need a Time or Count task and a target above 0)";
+    }
+    proposal.setGoals = proposal.setGoals.filter((x) => x.task.id !== task.id);
+    proposal.setGoals.push({ task, goal });
+    return "queued, waiting for user approval";
   }
   if (name === "add_to_my_day") {
     const r = addDayArgs.safeParse(args);

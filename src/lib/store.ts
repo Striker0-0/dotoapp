@@ -11,6 +11,13 @@ export interface HistoryEntry {
   dailyTaskId?: string;
 }
 
+/** Optional goal for a repetitive task, measured per calendar week (Mon-Sun). */
+export type WeeklyGoal =
+  /** Do it on at least `target` different days (7 = every day). */
+  | { kind: "days"; target: number }
+  /** Log at least `target` minutes (Time) or reps (Count) in the week. */
+  | { kind: "amount"; target: number };
+
 export interface GlobalTask {
   id: string;
   title: string;
@@ -20,6 +27,7 @@ export interface GlobalTask {
   isGloballyCompleted: boolean;
   history: HistoryEntry[];
   parentId?: string | null;
+  weeklyGoal?: WeeklyGoal | null;
 }
 
 export interface DailyTask {
@@ -33,6 +41,12 @@ export interface DailyTask {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+/** "2026-10-5" and "2026-10-05" both become 20261005. */
+function dayNumber(d: string): number {
+  const [y = 0, m = 0, day = 0] = d.split("-").map(Number);
+  return y * 10000 + m * 100 + day;
+}
 
 /** The "logical day" key: a day starts at 04:00 local time. */
 export function dayKey(d = new Date()): string {
@@ -66,6 +80,8 @@ interface State {
   syncTimers: () => void;
   updateHistoryEntry: (globalTaskId: string, entryId: string, amount: number) => void;
   removeHistoryEntry: (globalTaskId: string, entryId: string) => void;
+  /** Sets the logged amount for one past day (0 clears it). `date` is a YYYY-M-D day key. */
+  setHistoryForDay: (globalTaskId: string, date: string, amount: number) => void;
   checkReset: () => void;
 }
 
@@ -330,6 +346,21 @@ export const useStore = create<State>()(
               ? { ...g, history: g.history.filter((e) => e.id !== entryId) }
               : g,
           ),
+        })),
+
+      setHistoryForDay: (globalTaskId, date, amount) =>
+        set((s) => ({
+          globalTasks: s.globalTasks.map((g) => {
+            if (g.id !== globalTaskId) return g;
+            const n = dayNumber(date);
+            const existing = g.history.find((e) => dayNumber(e.date) === n);
+            const rest = g.history.filter((e) => dayNumber(e.date) !== n);
+            if (!Number.isFinite(amount) || amount <= 0) return { ...g, history: rest };
+            const entry: HistoryEntry = existing
+              ? { ...existing, amountLogged: amount }
+              : { id: uid(), date, amountLogged: amount };
+            return { ...g, history: [...rest, entry] };
+          }),
         })),
 
       checkReset: () => {
