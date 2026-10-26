@@ -27,7 +27,13 @@ import {
 
 const KEY_NAME = "doto_gemini_api_key";
 /** Tried in order. Later models are used when earlier ones are busy. */
-export const MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"] as const;
+export type Speed = "smart" | "fast";
+export const MODEL_ORDER: Record<Speed, readonly string[]> = {
+  smart: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
+  // Flash-Lite answers faster but is less careful with photos and planning.
+  fast: ["gemini-3.5-flash-lite", "gemini-3.8-flash"],
+};
+const SPEED_KEY = "doto_gemini_speed";
 const endpoint = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
@@ -41,6 +47,14 @@ function storage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+export function getSpeed(): Speed {
+  return storage()?.getItem(SPEED_KEY) === "fast" ? "fast" : "smart";
+}
+
+export function saveSpeed(speed: Speed): void {
+  storage()?.setItem(SPEED_KEY, speed);
 }
 
 export async function getApiKey(): Promise<string> {
@@ -626,10 +640,13 @@ async function generate(
   apiKey: string,
   history: ChatTurn[],
   context: string,
+  models: readonly string[],
   signal?: AbortSignal,
+  onStatus?: (message: string) => void,
 ): Promise<{ parts: Part[]; model: string }> {
   let lastError: unknown;
-  for (const model of MODELS) {
+  for (const [i, model] of models.entries()) {
+    if (i > 0) onStatus?.(`Busy, trying ${model}…`);
     // One retry per model when it is just busy.
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -640,7 +657,10 @@ async function generate(
         if (signal?.aborted) throw e;
         // 429 means this model's quota: switching model helps, waiting does not.
         if ((e as GeminiHttpError).status === 429) break;
-        if (attempt === 0) await sleep(1500);
+        if (attempt === 0) {
+          onStatus?.("Gemini is busy, retrying…");
+          await sleep(1500);
+        }
       }
     }
   }
@@ -697,6 +717,10 @@ export interface ChatResult {
   proposal: Proposal;
   /** Model that produced the last answer. */
   model: string;
+  /** Total time for the whole send, in milliseconds. */
+  ms: number;
+  /** How many model calls it took (more than 1 when tools were used or it retried models). */
+  calls: number;
 }
 
 /**
@@ -710,8 +734,12 @@ export async function sendChat(opts: {
   attachments: Attachment[];
   globalTasks: GlobalTask[];
   dailyTasks: DailyTask[];
+  speed?: Speed;
   signal?: AbortSignal;
+  onStatus?: (message: string) => void;
 }): Promise<ChatResult> {
+  const started = Date.now();
+  const models = MODEL_ORDER[opts.speed ?? "smart"];
   const userParts: Part[] = [
     ...opts.attachments.map((a) => ({ inlineData: { mimeType: a.mimeType, data: a.data } })),
   ];
@@ -726,9 +754,18 @@ export async function sendChat(opts: {
   const proposal = emptyProposal();
 
   let history: ChatTurn[] = [...opts.history, { role: "user", parts: userParts }];
-  let model: string = MODELS[0];
+  let model: string = models[0] ?? "";
+  let callCount = 0;
   for (let round = 0; round < 5; round++) {
-    const out = await generate(opts.apiKey, forRequest(history), context, opts.signal);
+    callCount++;
+    const out = await generate(
+      opts.apiKey,
+      forRequest(history),
+      context,
+      models,
+      opts.signal,
+      opts.onStatus,
+    );
     const parts = out.parts;
     model = out.model;
     history = [...history, { role: "model", parts }];
@@ -748,8 +785,9 @@ export async function sendChat(opts: {
       };
     });
     history = [...history, { role: "user", parts: responses }];
+    opts.onStatus?.("Checking your tasks…");
   }
-  return { history, proposal, model };
+  return { history, proposal, model, ms: Date.now() - started, calls: callCount };
 }
 
 // ---- Attachments -----------------------------------------------------------

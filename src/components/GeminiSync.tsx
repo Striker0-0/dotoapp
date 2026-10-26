@@ -11,7 +11,9 @@ import {
   fileToAttachment,
   getApiKey,
   isProposalEmpty,
-  MODELS,
+  MODEL_ORDER,
+  getSpeed,
+  saveSpeed,
   partImages,
   partText,
   saveApiKey,
@@ -19,6 +21,7 @@ import {
   type Attachment,
   type ChatTurn,
   type Proposal,
+  type Speed,
 } from "@/lib/gemini";
 
 const label = "mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground";
@@ -219,6 +222,10 @@ export function GeminiSync() {
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
+  const [speed, setSpeed] = useState<Speed>("smart");
+  const [status, setStatus] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const [meta, setMeta] = useState<{ model: string; ms: number; calls: number } | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -228,12 +235,21 @@ export function GeminiSync() {
   const bottom = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    setSpeed(getSpeed());
     getApiKey().then((k) => {
       setApiKey(k);
       setHasKey(Boolean(k));
     });
     return () => abort.current?.abort();
   }, []);
+
+  useEffect(() => {
+    if (!busy) return;
+    const t0 = Date.now();
+    setElapsed(0);
+    const i = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(i);
+  }, [busy]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -280,6 +296,8 @@ export function GeminiSync() {
   const onSend = async () => {
     if (busy || !apiKey.trim() || (!draft.trim() && attachments.length === 0)) return;
     setError("");
+    setStatus("");
+    setMeta(null);
     setBusy(true);
     abort.current?.abort();
     const controller = new AbortController();
@@ -298,10 +316,14 @@ export function GeminiSync() {
         attachments: sent,
         globalTasks: g,
         dailyTasks: d,
+        speed,
         signal: controller.signal,
+        onStatus: setStatus,
       });
       setHistory(result.history);
-      if (result.model !== MODELS[0]) flash(`${MODELS[0]} was busy, answered by ${result.model}.`);
+      setMeta({ model: result.model, ms: result.ms, calls: result.calls });
+      const first = MODEL_ORDER[speed][0];
+      if (first && result.model !== first) flash(`${first} was busy, answered by ${result.model}.`);
       setProposal(isProposalEmpty(result.proposal) ? null : result.proposal);
     } catch (e) {
       // Stopped by the user: give the message back, say nothing. New chat clears abort.current.
@@ -318,6 +340,7 @@ export function GeminiSync() {
       setAttachments(sent);
     } finally {
       setBusy(false);
+      setStatus("");
     }
   };
 
@@ -383,7 +406,31 @@ export function GeminiSync() {
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Chat</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Chat</p>
+            <div className="flex overflow-hidden rounded-full border border-border text-[11px]">
+              {(["smart", "fast"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    setSpeed(v);
+                    saveSpeed(v);
+                  }}
+                  title={
+                    v === "fast"
+                      ? "Lighter model: quicker, less careful with photos and planning"
+                      : "Best answers, can be slower"
+                  }
+                  className={`px-2.5 py-1 capitalize ${
+                    speed === v ? "bg-foreground text-background" : "text-muted-foreground"
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-1">
             <Button variant="ghost" size="sm" onClick={onCopy} aria-label="Copy tasks as JSON">
               <Copy className="size-4" />
@@ -408,8 +455,15 @@ export function GeminiSync() {
           ))}
           {busy && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Thinking…
+              <Loader2 className="size-4 animate-spin" /> Thinking… {elapsed}s
+              {status ? ` · ${status}` : ""}
             </div>
+          )}
+          {meta && !busy && (
+            <p className="text-[11px] text-muted-foreground">
+              {meta.model} · {(meta.ms / 1000).toFixed(1)}s
+              {meta.calls > 1 ? ` · ${meta.calls} steps` : ""}
+            </p>
           )}
           {proposal && !busy && (
             <ProposalCard
