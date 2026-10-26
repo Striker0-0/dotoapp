@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CalendarSettings } from "@/components/CalendarSettings";
+import { MemoryPanel } from "@/components/MemoryPanel";
 import { Textarea } from "@/components/ui/textarea";
 import { useStore } from "@/lib/store";
 import { goalLabel } from "@/lib/stats";
@@ -137,6 +139,7 @@ function ProposalCard({
                 <span className="ml-2 text-xs text-muted-foreground">
                   {t.recurrence} · {t.baseType}
                   {t.expiresAt ? ` · due ${t.expiresAt}` : ""}
+                  {t.plan ? " · + My Day" : ""}
                 </span>
               </li>
             ))}
@@ -164,6 +167,26 @@ function ProposalCard({
             {proposal.removeFromDay.map((x) => (
               <li key={x.task.id} className="py-1.5 text-sm">
                 {x.task.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(proposal.memoryAdd.length > 0 || proposal.memoryRemove.length > 0) && (
+        <div className="mb-3">
+          <p className="mb-1 text-xs text-muted-foreground">Memory</p>
+          <ul className="divide-y divide-border">
+            {proposal.memoryAdd.map((n) => (
+              <li key={`a-${n}`} className="py-1.5 text-sm">
+                <span className="mr-2 text-xs text-muted-foreground">Remember</span>
+                {n}
+              </li>
+            ))}
+            {proposal.memoryRemove.map((n) => (
+              <li key={`r-${n}`} className="py-1.5 text-sm">
+                <span className="mr-2 text-xs text-destructive">Forget</span>
+                {n}
               </li>
             ))}
           </ul>
@@ -296,7 +319,7 @@ export function GeminiSync() {
   const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 4)}••••••••${apiKey.slice(-3)}` : "••••••••";
 
   const onCopy = async () => {
-    const ok = await copyText(JSON.stringify(buildPayload(globalTasks, dailyTasks), null, 2));
+    const ok = await copyText(JSON.stringify(buildPayload(globalTasks, dailyTasks, useStore.getState().memory), null, 2));
     flash(ok ? "Tasks copied as JSON." : "Couldn't copy to the clipboard.");
   };
 
@@ -338,6 +361,7 @@ export function GeminiSync() {
         attachments: sent,
         globalTasks: g,
         dailyTasks: d,
+        memory: useStore.getState().memory,
         speed,
         signal: controller.signal,
         onStatus: setStatus,
@@ -370,15 +394,18 @@ export function GeminiSync() {
     if (!proposal) return;
     const s = useStore.getState();
     proposal.complete.forEach((t) => s.completeGlobalTask(t.id));
-    proposal.newTasks.forEach((t) =>
-      s.addGlobalTask({
+    proposal.newTasks.forEach((t) => {
+      const id = s.addGlobalTask({
         title: t.title,
         recurrence: t.recurrence,
         baseType: t.baseType,
         parentId: null,
         ...(t.expiresAt ? { expiresAt: t.expiresAt } : {}),
-      }),
-    );
+      });
+      if (t.plan) s.addToMyDay(id, t.baseType, t.plan);
+    });
+    proposal.memoryAdd.forEach((n) => s.addMemory(n));
+    proposal.memoryRemove.forEach((n) => s.removeMemory(n));
     proposal.myDay.forEach((m) => s.addToMyDay(m.task.id, m.task.baseType, m.targetValue));
     proposal.setGoals.forEach((x) => s.updateGlobalTask(x.task.id, { weeklyGoal: x.goal }));
     proposal.removeFromDay.forEach((x) => s.removeDailyTask(x.dailyId));
@@ -482,6 +509,9 @@ export function GeminiSync() {
           </div>
         )}
       </section>
+
+      <CalendarSettings />
+      <MemoryPanel />
 
       <section>
         <div className="mb-3 flex items-center justify-between">
