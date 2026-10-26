@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, FileText, Loader2, Paperclip, Send, Square, Trash2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  FileText,
+  Loader2,
+  Paperclip,
+  Send,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -221,6 +232,9 @@ export function GeminiSync() {
   const [history, setHistory] = useState<ChatTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [speed, setSpeed] = useState<Speed>("smart");
   const [status, setStatus] = useState("");
@@ -239,6 +253,7 @@ export function GeminiSync() {
     getApiKey().then((k) => {
       setApiKey(k);
       setHasKey(Boolean(k));
+      setKeyOpen(!k);
     });
     return () => abort.current?.abort();
   }, []);
@@ -264,6 +279,8 @@ export function GeminiSync() {
     if (!apiKey.trim()) return;
     await saveApiKey(apiKey);
     setHasKey(true);
+    setEditingKey(false);
+    setKeyOpen(false);
     flash("API key saved on this device.");
   };
 
@@ -271,7 +288,12 @@ export function GeminiSync() {
     await clearApiKey();
     setApiKey("");
     setHasKey(false);
+    setEditingKey(false);
+    setConfirmRemove(false);
+    setKeyOpen(true);
   };
+
+  const maskedKey = apiKey.length > 8 ? `${apiKey.slice(0, 4)}••••••••${apiKey.slice(-3)}` : "••••••••";
 
   const onCopy = async () => {
     const ok = await copyText(JSON.stringify(buildPayload(globalTasks, dailyTasks), null, 2));
@@ -381,27 +403,84 @@ export function GeminiSync() {
   return (
     <div className="space-y-8">
       <section>
-        <p className={label}>Gemini API key</p>
-        <div className="flex gap-2">
-          <Input
-            type="password"
-            autoComplete="off"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="AIza…"
+        <button
+          type="button"
+          onClick={() => {
+            setKeyOpen((o) => !o);
+            setConfirmRemove(false);
+          }}
+          aria-expanded={keyOpen}
+          className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left"
+        >
+          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Gemini API key
+            <span className="ml-2 normal-case tracking-normal text-foreground">
+              {hasKey ? "Saved ✓" : "Not set"}
+            </span>
+          </span>
+          <ChevronDown
+            className={`size-4 text-muted-foreground transition-transform ${keyOpen ? "rotate-180" : ""}`}
           />
-          <Button variant="outline" onClick={onSaveKey} disabled={!apiKey.trim()}>
-            Save
-          </Button>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Stored only on this device. Messages, photos and your tasks go to Google.
-          {hasKey && (
-            <button onClick={onClearKey} className="ml-2 underline underline-offset-2">
-              Remove key
-            </button>
-          )}
-        </p>
+        </button>
+
+        {keyOpen && (
+          <div className="mt-3 px-1">
+            {hasKey && !editingKey ? (
+              <>
+                <p className="rounded-md border border-border px-3 py-2 font-mono text-sm text-muted-foreground">
+                  {maskedKey}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setApiKey("");
+                      setEditingKey(true);
+                      setConfirmRemove(false);
+                    }}
+                  >
+                    Change
+                  </Button>
+                  <Button
+                    variant={confirmRemove ? "destructive" : "outline"}
+                    size="sm"
+                    onClick={() => (confirmRemove ? onClearKey() : setConfirmRemove(true))}
+                  >
+                    {confirmRemove ? "Tap again to remove" : "Remove"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="AIza…"
+                />
+                <Button onClick={onSaveKey} disabled={!apiKey.trim()}>
+                  Save
+                </Button>
+                {editingKey && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      getApiKey().then(setApiKey);
+                      setEditingKey(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Stored only on this device. Messages, photos and your tasks go to Google.
+            </p>
+          </div>
+        )}
       </section>
 
       <section>
