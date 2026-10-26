@@ -11,6 +11,40 @@ export interface HistoryEntry {
   dailyTaskId?: string;
 }
 
+/** Optional goal for a repetitive task, measured per calendar week (Mon-Sun). */
+export type WeeklyGoal =
+  /** Do it on at least `target` different days (7 = every day). */
+  | { kind: "days"; target: number }
+  /** Log at least `target` minutes (Time) or reps (Count) in the week. */
+  | { kind: "amount"; target: number };
+
+/** Rules the app applies by itself from the linked calendar. No AI calls involved. */
+export interface AutoPlanSettings {
+  /** Put today's calendar events into My Day. */
+  addEvents: boolean;
+  /** Also add all-day events (birthdays, holidays...). Timed events are always added. */
+  includeAllDay: boolean;
+  /** Add study time shortly before events that look like exams. */
+  examPrep: boolean;
+  /** Comma separated words that make an event count as an exam. */
+  examKeywords: string;
+  studyMinutes: number;
+  /** How many days before the exam the study time is planned (1 = the day before). */
+  daysBefore: number;
+}
+
+export const defaultAutoplan: AutoPlanSettings = {
+  addEvents: true,
+  includeAllDay: true,
+  examPrep: true,
+  examKeywords: "exam, test, quiz, midterm, prova, teste, avalia",
+  studyMinutes: 120,
+  daysBefore: 1,
+};
+
+export const MAX_MEMORY_NOTES = 20;
+export const MAX_NOTE_LENGTH = 200;
+
 export interface GlobalTask {
   id: string;
   title: string;
@@ -20,6 +54,9 @@ export interface GlobalTask {
   isGloballyCompleted: boolean;
   history: HistoryEntry[];
   parentId?: string | null;
+  weeklyGoal?: WeeklyGoal | null;
+  /** Created by the calendar auto-plan, not by the user. */
+  auto?: "event" | "study";
 }
 
 export interface DailyTask {
@@ -33,6 +70,12 @@ export interface DailyTask {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+/** "2026-10-5" and "2026-10-05" both become 20261005. */
+function dayNumber(d: string): number {
+  const [y = 0, m = 0, day = 0] = d.split("-").map(Number);
+  return y * 10000 + m * 100 + day;
+}
 
 /** The "logical day" key: a day starts at 04:00 local time. */
 export function dayKey(d = new Date()): string {
@@ -50,9 +93,19 @@ interface State {
   globalTasks: GlobalTask[];
   dailyTasks: DailyTask[];
   lastResetDate: string;
+  /** Short notes the user wants Gemini to remember. Sent with every message, so kept small. */
+  memory: string[];
+  /** Calendar events the auto-plan already handled, so deleting a task does not bring it back. */
+  autoHandled: string[];
+  autoplan: AutoPlanSettings;
+  addMemory: (note: string) => void;
+  removeMemory: (note: string) => void;
+  markHandled: (keys: string[]) => void;
+  setAutoplan: (updates: Partial<AutoPlanSettings>) => void;
+  /** Returns the id of the new task. */
   addGlobalTask: (
     t: Omit<GlobalTask, "id" | "isGloballyCompleted" | "history">,
-  ) => void;
+  ) => string;
   updateGlobalTask: (id: string, updates: Partial<GlobalTask>) => void;
   removeGlobalTask: (id: string) => void;
   completeGlobalTask: (id: string) => void;
@@ -66,6 +119,8 @@ interface State {
   syncTimers: () => void;
   updateHistoryEntry: (globalTaskId: string, entryId: string, amount: number) => void;
   removeHistoryEntry: (globalTaskId: string, entryId: string) => void;
+  /** Sets the logged amount for one past day (0 clears it). `date` is a YYYY-M-D day key. */
+  setHistoryForDay: (globalTaskId: string, date: string, amount: number) => void;
   checkReset: () => void;
 }
 
@@ -154,14 +209,41 @@ export const useStore = create<State>()(
       globalTasks: seedGlobal,
       dailyTasks: [],
       lastResetDate: dayKey(),
+      memory: [],
+      autoHandled: [],
+      autoplan: defaultAutoplan,
 
-      addGlobalTask: (t) =>
+      addMemory: (note) => {
+        const text = note.trim().slice(0, MAX_NOTE_LENGTH);
+        if (!text) return;
+        set((s) => {
+          if (s.memory.some((m) => m.toLowerCase() === text.toLowerCase())) return s;
+          return { memory: [...s.memory, text].slice(-MAX_MEMORY_NOTES) };
+        });
+      },
+
+      removeMemory: (note) =>
+        set((s) => ({
+          memory: s.memory.filter((m) => m.toLowerCase() !== note.trim().toLowerCase()),
+        })),
+
+      markHandled: (keys) =>
+        set((s) => ({
+          autoHandled: [...new Set([...s.autoHandled, ...keys])].slice(-600),
+        })),
+
+      setAutoplan: (updates) => set((s) => ({ autoplan: { ...s.autoplan, ...updates } })),
+
+      addGlobalTask: (t) => {
+        const id = uid();
         set((s) => ({
           globalTasks: [
             ...s.globalTasks,
-            { parentId: null, ...t, id: uid(), isGloballyCompleted: false, history: [] },
+            { parentId: null, ...t, id, isGloballyCompleted: false, history: [] },
           ],
-        })),
+        }));
+        return id;
+      },
 
       updateGlobalTask: (id, updates) =>
         set((s) => ({
@@ -332,6 +414,21 @@ export const useStore = create<State>()(
           ),
         })),
 
+      setHistoryForDay: (globalTaskId, date, amount) =>
+        set((s) => ({
+          globalTasks: s.globalTasks.map((g) => {
+            if (g.id !== globalTaskId) return g;
+            const n = dayNumber(date);
+            const existing = g.history.find((e) => dayNumber(e.date) === n);
+            const rest = g.history.filter((e) => dayNumber(e.date) !== n);
+            if (!Number.isFinite(amount) || amount <= 0) return { ...g, history: rest };
+            const entry: HistoryEntry = existing
+              ? { ...existing, amountLogged: amount }
+              : { id: uid(), date, amountLogged: amount };
+            return { ...g, history: [...rest, entry] };
+          }),
+        })),
+
       checkReset: () => {
         const today = get().lastResetDate;
         if (today !== dayKey()) {
@@ -355,6 +452,9 @@ export const useStore = create<State>()(
               id: entry.id ?? uid(),
             })),
           })),
+          memory: Array.isArray(saved?.memory) ? saved.memory : [],
+          autoHandled: Array.isArray(saved?.autoHandled) ? saved.autoHandled : [],
+          autoplan: { ...defaultAutoplan, ...(saved?.autoplan ?? {}) },
           dailyTasks: (saved?.dailyTasks ?? []).map((d) => ({
             ...d,
             timerStartTime: d.timerStartTime ?? null,
