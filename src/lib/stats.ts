@@ -94,7 +94,7 @@ export function unitFor(baseType: TrackingType): string {
 
 export function formatAmount(baseType: TrackingType, n: number): string {
   if (baseType === "Time") return formatMinutes(n);
-  if (baseType === "Count") return `${Math.round(n)} reps`;
+  if (baseType === "Count") return `${Math.round(n)} rep.`;
   return n >= 1 ? "feito" : "";
 }
 

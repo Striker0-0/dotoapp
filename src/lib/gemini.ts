@@ -17,6 +17,7 @@ import {
   mergeTotals,
   normDate,
   round2,
+  todayYmd,
   sumRange,
   weekBounds,
   weekProgress,
@@ -174,6 +175,8 @@ export interface Proposal {
   deleteTasks: { task: GlobalTask; subtaskCount: number }[];
   /** Set (or clear, with null) a weekly goal. */
   setGoals: { task: GlobalTask; goal: WeeklyGoal | null }[];
+  /** Set (amount > 0) or clear (0) what a task logged on a past day. */
+  setLogs: { task: GlobalTask; date: string; amount: number }[];
   /** Notes to save to the memory. */
   memoryAdd: string[];
   /** Saved notes to delete. */
@@ -187,6 +190,7 @@ export const emptyProposal = (): Proposal => ({
   removeFromDay: [],
   deleteTasks: [],
   setGoals: [],
+  setLogs: [],
   memoryAdd: [],
   memoryRemove: [],
 });
@@ -198,6 +202,7 @@ export const isProposalEmpty = (p: Proposal) =>
   p.removeFromDay.length === 0 &&
   p.deleteTasks.length === 0 &&
   p.setGoals.length === 0 &&
+  p.setLogs.length === 0 &&
   p.memoryAdd.length === 0 &&
   p.memoryRemove.length === 0;
 
@@ -208,6 +213,7 @@ You also get the user's current tasks as JSON (below). You can change their task
 - complete_task: mark an open task finished, only if the user says it is done.
 - get_logged_time: look up how much was logged for a task between two dates (inclusive). Use it for ANY question about past totals, time spent, or counts. Never add numbers yourself; report the numbers the tool returns. Convert dates the user writes (day/month, e.g. 15/10) to YYYY-MM-DD; assume the current year unless told otherwise. It also finds completed tasks. Leave query and taskId empty to total across ALL tasks; the result then has a timeTotal for Time tasks. For ranges over 62 days it returns monthly totals instead of daily.
 - get_goal_progress: how the user did against weekly goals, week by week (Monday to Sunday). Use it for any question about goals; do not work it out yourself.
+- set_logged_time: correct the history of a task on a PAST day (not today; today is edited in My Day). amount is minutes for Time tasks, reps for Count tasks, 1 = done / 0 = not done for Simple tasks; 0 clears the day. One call per day. Use it when the user wants to fix, add or remove past records.
 - set_weekly_goal: set or clear a weekly goal on a repetitive task (kind "days" with target 1-7, kind "amount" with minutes or reps, or "none"). Not for major tasks that have subtasks.
 - get_calendar_events: read the user's calendar between two dates (YYYY-MM-DD, at most 62 days). Use it for questions about events, schedule or exams. The app already adds today's events and exam study time to My Day by itself, so do not add those again.
 - remember: save a lasting fact or preference about the user (when they study best, routines, subjects). Only when they ask you to remember something or clearly state a lasting preference; never for one-off things. One short sentence.
@@ -321,6 +327,19 @@ const TOOLS = [
         },
       },
       {
+        name: "set_logged_time",
+        description: "Set what a task logged on one past day (0 clears the day). Not for today.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            taskId: { type: "STRING", description: "id from tasks" },
+            date: { type: "STRING", description: "YYYY-MM-DD, before today" },
+            amount: { type: "NUMBER", description: "minutes (Time), reps (Count), 1 or 0 (Simple)" },
+          },
+          required: ["taskId", "date", "amount"],
+        },
+      },
+      {
         name: "set_weekly_goal",
         description: "Set or clear the weekly goal of a repetitive task.",
         parameters: {
@@ -381,6 +400,12 @@ const goalProgressArgs = z.object({
   taskId: z.string().optional(),
   weeks: z.number().optional(),
 });
+const setLogArgs = z.object({
+  taskId: z.string(),
+  date: z.string(),
+  amount: z.number(),
+});
+
 const setGoalArgs = z.object({
   taskId: z.string(),
   kind: z.enum(["days", "amount", "none"]),
@@ -558,6 +583,24 @@ function handleCall(
     const r = goalProgressArgs.safeParse(args);
     if (!r.success) return "error: invalid arguments";
     return goalProgressReport(r.data, allTasks);
+  }
+  if (name === "set_logged_time") {
+    const r = setLogArgs.safeParse(args);
+    if (!r.success) return "error: invalid arguments";
+    const task = allTasks.find((g) => g.id === r.data.taskId);
+    if (!task) return "error: unknown task id";
+    if (allTasks.some((g) => g.parentId === task.id)) {
+      return "error: this is a major task with subtasks; edit the subtasks";
+    }
+    const date = normDate(r.data.date);
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(r.data.date.trim())) return "error: date must be YYYY-MM-DD";
+    if (date >= todayYmd()) return "error: only past days can be edited here; today is edited in My Day";
+    if (!Number.isFinite(r.data.amount) || r.data.amount < 0) return "error: invalid amount";
+    const cap = task.baseType === "Time" ? 1440 : task.baseType === "Count" ? 100000 : 1;
+    const amount = Math.min(cap, Math.round(r.data.amount));
+    proposal.setLogs = proposal.setLogs.filter((x) => !(x.task.id === task.id && x.date === date));
+    proposal.setLogs.push({ task, date, amount });
+    return "queued, waiting for user approval";
   }
   if (name === "set_weekly_goal") {
     const r = setGoalArgs.safeParse(args);

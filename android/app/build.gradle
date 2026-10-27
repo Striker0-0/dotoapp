@@ -7,13 +7,24 @@ android {
         applicationId "com.striker.dotoapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // Grows with every CI build so a new APK always installs over the old one.
+        versionCode (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        // Fixed debug key (committed on purpose, it protects nothing): every build is signed
+        // the same way, so installing a new APK updates the app and keeps your data.
+        debug {
+            storeFile file('doto-debug.keystore')
+            storePassword 'android'
+            keyAlias 'doto'
+            keyPassword 'android'
         }
     }
     buildTypes {

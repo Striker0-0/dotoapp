@@ -13,12 +13,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BackupPanel } from "@/components/BackupPanel";
 import { CalendarSettings } from "@/components/CalendarSettings";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { MemoryPanel } from "@/components/MemoryPanel";
 import { Textarea } from "@/components/ui/textarea";
 import { useStore } from "@/lib/store";
-import { goalLabel } from "@/lib/stats";
+import { formatAmount, goalLabel, toStoreKey } from "@/lib/stats";
 import {
   buildPayload,
   clearApiKey,
@@ -188,6 +189,23 @@ function ProposalCard({
               <li key={`r-${n}`} className="py-1.5 text-sm">
                 <span className="mr-2 text-xs text-destructive">Esquecer</span>
                 {n}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {proposal.setLogs.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1 text-xs text-muted-foreground">Histórico</p>
+          <ul className="divide-y divide-border">
+            {proposal.setLogs.map((x) => (
+              <li key={`${x.task.id}${x.date}`} className="py-1.5 text-sm">
+                {x.task.title}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {x.date.split("-").reverse().join("/")}:{" "}
+                  {x.amount > 0 ? formatAmount(x.task.baseType, x.amount) || "feito" : "apagar dia"}
+                </span>
               </li>
             ))}
           </ul>
@@ -408,6 +426,7 @@ export function GeminiSync() {
     proposal.memoryAdd.forEach((n) => s.addMemory(n));
     proposal.memoryRemove.forEach((n) => s.removeMemory(n));
     proposal.myDay.forEach((m) => s.addToMyDay(m.task.id, m.task.baseType, m.targetValue));
+    proposal.setLogs.forEach((x) => s.setHistoryForDay(x.task.id, toStoreKey(x.date), x.amount));
     proposal.setGoals.forEach((x) => s.updateGlobalTask(x.task.id, { weeklyGoal: x.goal }));
     proposal.removeFromDay.forEach((x) => s.removeDailyTask(x.dailyId));
     proposal.deleteTasks.forEach((x) => s.removeGlobalTask(x.task.id));
@@ -514,6 +533,7 @@ export function GeminiSync() {
       <CalendarSettings />
       <NotificationSettings />
       <MemoryPanel />
+      <BackupPanel />
 
       <section>
         <div className="mb-3 flex items-center justify-between">
