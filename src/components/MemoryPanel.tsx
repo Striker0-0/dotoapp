@@ -30,9 +30,9 @@ export function MemoryPanel() {
         className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left"
       >
         <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          Memory
+          Memória
           <span className="ml-2 normal-case tracking-normal text-foreground">
-            {memory.length === 0 ? "Empty" : `${memory.length} ${memory.length === 1 ? "note" : "notes"}`}
+            {memory.length === 0 ? "Vazia" : `${memory.length} ${memory.length === 1 ? "nota" : "notas"}`}
           </span>
         </span>
         <ChevronDown
@@ -44,8 +44,8 @@ export function MemoryPanel() {
         <div className="mt-3 px-1">
           {memory.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nothing saved. Tell Gemini &ldquo;remember that I study best in the morning&rdquo; and
-              approve the note, or add one here.
+              Nada salvo. Diga ao Gemini &ldquo;lembre que estudo melhor de manhã&rdquo; e
+              aprove a nota, ou adicione uma aqui.
             </p>
           ) : (
             <ul className="divide-y divide-border">
@@ -55,7 +55,7 @@ export function MemoryPanel() {
                   <button
                     type="button"
                     onClick={() => removeMemory(note)}
-                    aria-label="Forget this note"
+                    aria-label="Esquecer esta nota"
                     className="mt-0.5 shrink-0 text-muted-foreground/70 hover:text-foreground"
                   >
                     <X className="size-4" />
@@ -71,15 +71,15 @@ export function MemoryPanel() {
               maxLength={MAX_NOTE_LENGTH}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
-              placeholder="Add a note"
+              placeholder="Adicionar uma nota"
             />
-            <Button variant="outline" size="icon" onClick={add} disabled={!draft.trim()} aria-label="Add note">
+            <Button variant="outline" size="icon" onClick={add} disabled={!draft.trim()} aria-label="Adicionar nota">
               <Plus className="size-4" />
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Sent with every message, so keep it short (up to {MAX_MEMORY_NOTES} notes). Old chats
-            are never resent.
+            Enviadas em toda mensagem, então mantenha curtas (até {MAX_MEMORY_NOTES} notas). Conversas
+            antigas nunca são reenviadas.
           </p>
         </div>
       )}

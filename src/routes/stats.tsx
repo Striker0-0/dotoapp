@@ -25,8 +25,8 @@ import {
 export const Route = createFileRoute("/stats")({
   head: () => ({
     meta: [
-      { title: "Stats · Slate" },
-      { name: "description", content: "Daily heatmap of your time and weekly goals." },
+      { title: "Estatísticas · Slate" },
+      { name: "description", content: "Mapa de calor diário do seu tempo e metas semanais." },
     ],
   }),
   component: Stats,
@@ -95,9 +95,9 @@ function Stats() {
   return (
     <div className="mx-auto min-h-screen max-w-md px-6 pb-28 pt-12">
       <header className="mb-8">
-        <h1 className="text-[28px] font-medium tracking-tight">Stats</h1>
+        <h1 className="text-[28px] font-medium tracking-tight">Estatísticas</h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          Tap a day to see it. Ask Gemini to sum any period.
+          Toque em um dia para ver. Peça ao Gemini para somar qualquer período.
         </p>
       </header>
 
@@ -105,11 +105,11 @@ function Stats() {
         <select
           value={pick}
           onChange={(e) => setPick(e.target.value)}
-          aria-label="Task to show"
+          aria-label="Tarefa a mostrar"
           className="mb-4 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none"
         >
           <option value="all" className="bg-card text-foreground">
-            All time-tracked tasks
+            Todas as tarefas com tempo
           </option>
           {globalTasks.map((g) => (
             <option key={g.id} value={g.id} className="bg-card text-foreground">
@@ -129,17 +129,17 @@ function Stats() {
 
         {selectedDay && task && !isParent && <DayEditor task={task} date={selectedDay} />}
         {selectedDay && task && isParent && (
-          <p className="mt-3 text-xs text-muted-foreground">Open a subtask to edit its days.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Abra uma subtarefa para editar os dias.</p>
         )}
         {selectedDay && !task && (
           <div className="mt-3 rounded-lg border border-border p-3 text-sm">
             <p className="text-xs text-muted-foreground">
-              {new Date(`${selectedDay}T12:00:00`).toLocaleDateString(undefined, {
+              {new Date(`${selectedDay}T12:00:00`).toLocaleDateString("pt-BR", {
                 weekday: "long",
                 day: "numeric",
                 month: "short",
               })}
-              <span className="ml-2 text-foreground">{fmt(values.get(selectedDay) ?? 0) || "nothing logged"}</span>
+              <span className="ml-2 text-foreground">{fmt(values.get(selectedDay) ?? 0) || "nada registrado"}</span>
             </p>
             {dayBreakdown.length > 0 && (
               <ul className="mt-2 space-y-1">
@@ -152,20 +152,20 @@ function Stats() {
               </ul>
             )}
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Pick one task above to edit a day.
+              Escolha uma tarefa acima para editar um dia.
             </p>
           </div>
         )}
       </section>
 
       <section className="mb-8">
-        <p className={label}>Totals</p>
+        <p className={label}>Totais</p>
         <div className="grid grid-cols-2 gap-3">
-          <Tile title="This week" value={fmt(week.amount) || "0"} sub={`${week.days} active days`} />
-          <Tile title="Last week" value={fmt(prev.amount) || "0"} sub={`${prev.days} active days`} />
-          <Tile title="Last 30 days" value={fmt(month.amount) || "0"} sub={`${month.days} active days`} />
+          <Tile title="Esta semana" value={fmt(week.amount) || "0"} sub={`${week.days} dias ativos`} />
+          <Tile title="Semana passada" value={fmt(prev.amount) || "0"} sub={`${prev.days} dias ativos`} />
+          <Tile title="Últimos 30 dias" value={fmt(month.amount) || "0"} sub={`${month.days} dias ativos`} />
           <Tile
-            title="Average active day"
+            title="Média por dia ativo"
             value={avg > 0 ? fmt(avg) : "0"}
             sub="last 30 days"
           />
@@ -173,10 +173,10 @@ function Stats() {
       </section>
 
       <section>
-        <p className={label}>Weekly goals</p>
+        <p className={label}>Metas semanais</p>
         {goalTasks.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No goals yet. Add one when you create or edit a repetitive task.
+            Nenhuma meta ainda. Adicione ao criar ou editar uma tarefa recorrente.
           </p>
         ) : (
           <div className="space-y-4">

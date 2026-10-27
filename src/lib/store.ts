@@ -37,10 +37,21 @@ export const defaultAutoplan: AutoPlanSettings = {
   addEvents: true,
   includeAllDay: true,
   examPrep: true,
-  examKeywords: "exam, test, quiz, midterm, prova, teste, avalia",
+  examKeywords: "prova, teste, avalia, exame, exam, quiz, midterm, test",
   studyMinutes: 120,
   daysBefore: 1,
 };
+
+/** Local reminders on the phone. Content is built from the app's own data, no AI calls. */
+export interface NotifySettings {
+  enabled: boolean;
+  /** HH:MM, the morning summary */
+  morning: string;
+  /** HH:MM, the evening heads-up */
+  evening: string;
+}
+
+export const defaultNotify: NotifySettings = { enabled: false, morning: "08:00", evening: "19:00" };
 
 export const MAX_MEMORY_NOTES = 20;
 export const MAX_NOTE_LENGTH = 200;
@@ -98,6 +109,8 @@ interface State {
   /** Calendar events the auto-plan already handled, so deleting a task does not bring it back. */
   autoHandled: string[];
   autoplan: AutoPlanSettings;
+  notify: NotifySettings;
+  setNotify: (updates: Partial<NotifySettings>) => void;
   addMemory: (note: string) => void;
   removeMemory: (note: string) => void;
   markHandled: (keys: string[]) => void;
@@ -212,6 +225,9 @@ export const useStore = create<State>()(
       memory: [],
       autoHandled: [],
       autoplan: defaultAutoplan,
+      notify: defaultNotify,
+
+      setNotify: (updates) => set((s) => ({ notify: { ...s.notify, ...updates } })),
 
       addMemory: (note) => {
         const text = note.trim().slice(0, MAX_NOTE_LENGTH);
@@ -455,6 +471,7 @@ export const useStore = create<State>()(
           memory: Array.isArray(saved?.memory) ? saved.memory : [],
           autoHandled: Array.isArray(saved?.autoHandled) ? saved.autoHandled : [],
           autoplan: { ...defaultAutoplan, ...(saved?.autoplan ?? {}) },
+          notify: { ...defaultNotify, ...(saved?.notify ?? {}) },
           dailyTasks: (saved?.dailyTasks ?? []).map((d) => ({
             ...d,
             timerStartTime: d.timerStartTime ?? null,

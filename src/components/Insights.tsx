@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useHydrated } from "@/components/useHydrated";
-import { CALENDAR_EVENT, cachedCalendarText, parseIcs, type CalendarEvent } from "@/lib/calendar";
+import { CALENDAR_EVENT, cachedEvents, type CalendarEvent } from "@/lib/calendar";
 import {
   askBriefing,
   briefingKey,
@@ -36,13 +36,8 @@ export function Insights() {
 
   useEffect(() => {
     const read = () => {
-      const text = cachedCalendarText();
       const today = todayYmd();
-      try {
-        setEvents(text ? parseIcs(text, today, addDays(today, 7)) : []);
-      } catch {
-        setEvents([]);
-      }
+      setEvents(cachedEvents(today, addDays(today, 7)));
     };
     read();
     setBriefing(getSavedBriefing());
@@ -73,7 +68,7 @@ export function Insights() {
     setError("");
     const apiKey = (await getApiKey()).trim();
     if (!apiKey) {
-      setError("Add your Gemini API key in the Gemini tab first.");
+      setError("Adicione sua chave da API do Gemini na aba Gemini primeiro.");
       return;
     }
     setBusy(true);
@@ -81,7 +76,7 @@ export function Insights() {
       const out = await askBriefing({ apiKey, speed: getSpeed(), input });
       setBriefing({ key: out.key, text: out.text, at: Date.now() });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't get the briefing.");
+      setError(e instanceof Error ? e.message : "Não consegui gerar o resumo.");
     } finally {
       setBusy(false);
     }
@@ -92,21 +87,21 @@ export function Insights() {
   return (
     <section className="mb-8 rounded-lg border border-border p-4">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Heads up</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Atenção</p>
         <Button
           variant="ghost"
           size="sm"
           onClick={onBriefing}
           disabled={busy || fresh}
-          title={fresh ? "Nothing has changed since the last briefing" : "Ask Gemini for a short briefing"}
+          title={fresh ? "Nada mudou desde o último resumo" : "Peça um resumo curto ao Gemini"}
         >
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-          {busy ? "Thinking…" : fresh ? "Briefing up to date" : briefing ? "Refresh briefing" : "AI briefing"}
+          {busy ? "Pensando…" : fresh ? "Resumo atualizado" : briefing ? "Atualizar resumo" : "Resumo com IA"}
         </Button>
       </div>
 
       {insights.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">Nothing needs your attention.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Nada precisa da sua atenção.</p>
       ) : (
         <ul className="mt-2 space-y-1.5">
           {insights.map((i) => (
@@ -126,8 +121,8 @@ export function Insights() {
         <div className="mt-4 border-t border-border pt-3">
           <p className="whitespace-pre-wrap text-sm">{briefing.text}</p>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            {fresh ? "Gemini" : "Gemini, before your latest changes"} ·{" "}
-            {new Date(briefing.at).toLocaleString(undefined, {
+            {fresh ? "Gemini" : "Gemini, antes das suas últimas mudanças"} ·{" "}
+            {new Date(briefing.at).toLocaleString("pt-BR", {
               day: "numeric",
               month: "short",
               hour: "2-digit",

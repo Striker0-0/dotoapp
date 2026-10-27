@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { WheelColumn, range } from "./WheelPicker";
+import { typeLabel } from "@/lib/labels";
 import { useStore, type GlobalTask, type TrackingType } from "@/lib/store";
 
 export function AddToDaySheet({
@@ -51,20 +52,20 @@ export function AddToDaySheet({
           >
             <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-border" />
             <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              Add to my day
+              Adicionar ao meu dia
             </p>
             <h2 className="mt-1 text-xl font-medium tracking-tight">{task.title}</h2>
 
             {mode === null && (
               <div className="mt-6 space-y-2">
-                <p className="text-sm text-muted-foreground">How do you want to track it today?</p>
+                <p className="text-sm text-muted-foreground">Como você quer acompanhar hoje?</p>
                 {(["Simple", "Time"] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
                     className="w-full rounded-xl border border-border px-4 py-3.5 text-left text-sm transition-colors hover:bg-muted"
                   >
-                    <span className="font-medium">{m}</span>
+                    <span className="font-medium">{typeLabel[m]}</span>
                   </button>
                 ))}
               </div>
@@ -100,7 +101,7 @@ export function AddToDaySheet({
                 onClick={confirm}
                 className="mt-6 w-full rounded-xl bg-foreground py-3.5 text-sm font-medium text-background transition-opacity active:opacity-80"
               >
-                Add to My Day
+                Adicionar ao meu dia
               </button>
             )}
           </motion.div>

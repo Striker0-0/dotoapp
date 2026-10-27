@@ -42,20 +42,21 @@ import {
   type TrackingType,
   type WeeklyGoal,
 } from "@/lib/store";
+import { recurrenceLabel, typeLabel } from "@/lib/labels";
 import { cleanGoal, dailyTotals, formatAmount, progressLabel, weekProgress } from "@/lib/stats";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "All Tasks · Slate" },
+      { title: "Tarefas · Slate" },
       {
         name: "description",
-        content: "A calm, minimalist backlog. Hold a task to plan it into your day.",
+        content: "Uma lista calma e minimalista. Segure uma tarefa para planejá-la no seu dia.",
       },
-      { property: "og:title", content: "All Tasks · Slate" },
+      { property: "og:title", content: "Tarefas · Slate" },
       {
         property: "og:description",
-        content: "A calm, minimalist backlog. Hold a task to plan it into your day.",
+        content: "Uma lista calma e minimalista. Segure uma tarefa para planejá-la no seu dia.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -89,16 +90,16 @@ function TaskRow({
       : 0;
 
   const wp = !isParent && task.recurrence === "Repetitive" && task.weeklyGoal ? weekProgress(task) : null;
-  const goalText = wp ? `${progressLabel(task, wp)} this week${wp.met ? " ✓" : ""}` : "";
+  const goalText = wp ? `${progressLabel(task, wp)} nesta semana${wp.met ? " ✓" : ""}` : "";
 
   const subtitle =
     task.recurrence === "Once"
-      ? `${task.baseType} · ${formatDateDDMMYYYY(task.expiresAt)}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} logged` : ""}`
+      ? `${typeLabel[task.baseType]} · ${formatDateDDMMYYYY(task.expiresAt)}${loggedTime > 0 ? ` · ${formatMinutes(loggedTime)} registrados` : ""}`
       : isParent
-        ? "Major task"
+        ? "Tarefa principal"
         : goalText
-          ? `${task.baseType} · ${goalText}`
-          : task.baseType;
+          ? `${typeLabel[task.baseType]} · ${goalText}`
+          : typeLabel[task.baseType];
 
   return (
     <motion.li
@@ -125,7 +126,7 @@ function TaskRow({
             e.stopPropagation();
             moveGlobalTask(task.id, -1);
           }}
-          aria-label="Move up"
+          aria-label="Mover para cima"
           className="p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground"
         >
           <ChevronUp className="size-4" />
@@ -135,7 +136,7 @@ function TaskRow({
             e.stopPropagation();
             moveGlobalTask(task.id, 1);
           }}
-          aria-label="Move down"
+          aria-label="Mover para baixo"
           className="p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground"
         >
           <ChevronDown className="size-4" />
@@ -146,7 +147,7 @@ function TaskRow({
             e.stopPropagation();
             onRequestEdit();
           }}
-          aria-label="Edit task"
+          aria-label="Editar tarefa"
           className="p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground"
         >
           <Pencil className="size-4" />
@@ -157,7 +158,7 @@ function TaskRow({
             e.stopPropagation();
             onRequestDelete();
           }}
-          aria-label="Delete task"
+          aria-label="Excluir tarefa"
           className="p-1.5 text-muted-foreground/60 transition-colors hover:text-destructive"
         >
           <Trash2 className="size-4" />
@@ -169,8 +170,15 @@ function TaskRow({
 
 type StatsPeriod = "Total" | "Yearly" | "Monthly" | "Weekly";
 
+const PERIOD_LABEL: Record<StatsPeriod, string> = {
+  Total: "Total",
+  Yearly: "Anual",
+  Monthly: "Mensal",
+  Weekly: "Semanal",
+};
+
 function formatDateDDMMYYYY(dateString?: string | null) {
-  if (!dateString) return "no date";
+  if (!dateString) return "sem data";
   const parts = dateString.split("-");
   if (parts.length !== 3) return dateString;
   const [y, m, d] = parts;
@@ -237,7 +245,7 @@ function TaskStats({
         <DialogHeader>
           <DialogTitle>{task?.title}</DialogTitle>
           <DialogDescription>
-            {isParent ? "Combined progress of its subtasks" : "Progress history"}
+            {isParent ? "Progresso combinado das subtarefas" : "Histórico de progresso"}
           </DialogDescription>
         </DialogHeader>
         {task && (
@@ -247,7 +255,7 @@ function TaskStats({
             )}
             <div>
               <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Daily
+                Diário
               </p>
               <Heatmap
                 values={dailyTotals(history)}
@@ -263,7 +271,7 @@ function TaskStats({
               {selectedDay && !isParent && <DayEditor task={task} date={selectedDay} />}
               {selectedDay && isParent && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Open a subtask to edit its days.
+                  Abra uma subtarefa para editar os dias.
                 </p>
               )}
             </div>
@@ -282,14 +290,14 @@ function TaskStats({
                   : task.baseType !== "Simple";
                 return (
                   <div key={period} className="flex items-center justify-between py-4">
-                    <span className="text-sm text-muted-foreground">{period}</span>
+                    <span className="text-sm text-muted-foreground">{PERIOD_LABEL[period]}</span>
                     <div className="text-right">
                       <p className="text-sm font-medium tabular-nums">
-                        {daysDone} {daysDone === 1 ? "day" : "days"} done
+                        {daysDone} {daysDone === 1 ? "dia" : "dias"} feito{daysDone === 1 ? "" : "s"}
                       </p>
                       {showAmount && (
                         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                          {hasTime ? formatMinutes(amount) : `${amount} total`}
+                          {hasTime ? formatMinutes(amount) : `${amount} no total`}
                         </p>
                       )}
                     </div>
@@ -358,23 +366,23 @@ function Composer({ onClose }: { onClose: () => void }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="Task title"
+          placeholder="Título da tarefa"
           className="w-full bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
         />
-        <button onClick={onClose} aria-label="Close">
+        <button onClick={onClose} aria-label="Fechar">
           <X className="size-4 text-muted-foreground" />
         </button>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {(["Once", "Repetitive"] as const).map((r) => (
           <Chip key={r} on={recurrence === r} onClick={() => setRecurrence(r)}>
-            {r}
+            {recurrenceLabel[r]}
           </Chip>
         ))}
         <span className="mx-1 w-px bg-border" />
         {(["Simple", "Time", "Count"] as const).map((t) => (
           <Chip key={t} on={baseType === t} onClick={() => setBaseType(t)}>
-            {t}
+            {typeLabel[t]}
           </Chip>
         ))}
       </div>
@@ -382,13 +390,13 @@ function Composer({ onClose }: { onClose: () => void }) {
         <select
           value={parentId}
           onChange={(e) => setParentId(e.target.value)}
-          aria-label="Part of a major task"
+          aria-label="Parte de uma tarefa principal"
           className="mt-3 w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-xs text-muted-foreground outline-none"
         >
-          <option value="">Standalone task</option>
+          <option value="">Tarefa avulsa</option>
           {parentOptions.map((p) => (
             <option key={p.id} value={p.id}>
-              Part of: {p.title}
+              Parte de: {p.title}
             </option>
           ))}
         </select>
@@ -401,10 +409,10 @@ function Composer({ onClose }: { onClose: () => void }) {
       {recurrence === "Once" && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <Chip on={hasExpiration} onClick={() => setHasExpiration(true)}>
-            Expires
+            Vence em
           </Chip>
           <Chip on={!hasExpiration} onClick={() => setHasExpiration(false)}>
-            No expiration
+            Sem vencimento
           </Chip>
           {hasExpiration && (
             <input
@@ -420,7 +428,7 @@ function Composer({ onClose }: { onClose: () => void }) {
         onClick={submit}
         className="mt-4 w-full rounded-xl bg-foreground py-2.5 text-sm font-medium text-background"
       >
-        Add task
+        Adicionar tarefa
       </button>
     </motion.div>
   );
@@ -467,24 +475,24 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Edit Task</DialogTitle>
+          <DialogTitle>Editar tarefa</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Title</label>
+            <label className="mb-1 block text-xs text-muted-foreground">Título</label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Task Type</label>
+            <label className="mb-1 block text-xs text-muted-foreground">Tipo de tarefa</label>
             <select
               value={baseType}
               onChange={(e) => setBaseType(e.target.value as TrackingType)}
               className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none"
             >
-              <option value="Simple" className="bg-card text-foreground">Simple</option>
-              <option value="Time" className="bg-card text-foreground">Time</option>
-              <option value="Count" className="bg-card text-foreground">Count</option>
+              <option value="Simple" className="bg-card text-foreground">Simples</option>
+              <option value="Time" className="bg-card text-foreground">Tempo</option>
+              <option value="Count" className="bg-card text-foreground">Contagem</option>
             </select>
           </div>
 
@@ -494,7 +502,7 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
 
           {task.recurrence === "Once" && (
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Expiration</label>
+              <label className="mb-1 block text-xs text-muted-foreground">Vencimento</label>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button
                   type="button"
@@ -502,7 +510,7 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
                   size="sm"
                   onClick={() => setHasExpiration(true)}
                 >
-                  Expires
+                  Vence em
                 </Button>
                 <Button
                   type="button"
@@ -510,7 +518,7 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
                   size="sm"
                   onClick={() => setHasExpiration(false)}
                 >
-                  No expiration
+                  Sem vencimento
                 </Button>
                 {hasExpiration && (
                   <input
@@ -525,8 +533,8 @@ function EditTaskDialog({ task, onClose }: { task: GlobalTask | null; onClose: (
           )}
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="ghost" onClick={onClose} className="border border-border">Cancel</Button>
-          <Button onClick={submit} className="bg-foreground text-background">Save</Button>
+          <Button variant="ghost" onClick={onClose} className="border border-border">Cancelar</Button>
+          <Button onClick={submit} className="bg-foreground text-background">Salvar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -589,11 +597,11 @@ function AllTasks() {
     <div className="mx-auto min-h-screen max-w-md px-6 pb-28 pt-12">
       <header className="mb-8 flex items-end justify-between">
         <div>
-          <h1 className="text-[28px] font-medium tracking-tight">All Tasks</h1>
+          <h1 className="text-[28px] font-medium tracking-tight">Tarefas</h1>
         </div>
         <button
           onClick={() => setComposing((v) => !v)}
-          aria-label="New task"
+          aria-label="Nova tarefa"
           className="grid size-9 place-items-center rounded-full border border-border transition-colors hover:bg-muted"
         >
           <Plus className="size-4" />
@@ -605,7 +613,7 @@ function AllTasks() {
       {hydrated && repetitive.length > 0 && (
         <section className="mb-8">
           <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Repetitive
+            Recorrentes
           </p>
           <ul>
             {repetitive.map((t) => (
@@ -625,7 +633,7 @@ function AllTasks() {
           {expiringOnce.length > 0 && (
             <div className="mb-6">
               <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Once · Expires
+                Única · Com vencimento
               </p>
               <ul>
                 {expiringOnce.map((t) => (
@@ -638,7 +646,7 @@ function AllTasks() {
           {nonExpiringOnce.length > 0 && (
             <div>
               <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Once · No expiration
+                Única · Sem vencimento
               </p>
               <ul>
                 {nonExpiringOnce.map((t) => (
@@ -651,7 +659,7 @@ function AllTasks() {
       )}
 
       {hydrated && expiringOnce.length === 0 && nonExpiringOnce.length === 0 && repetitive.length === 0 && (
-        <p className="mt-24 text-center text-sm text-muted-foreground">Nothing here yet.</p>
+        <p className="mt-24 text-center text-sm text-muted-foreground">Nada por aqui ainda.</p>
       )}
 
       <AddToDaySheet task={selected} onClose={() => setSelected(null)} />
@@ -663,13 +671,13 @@ function AllTasks() {
       >
         <AlertDialogContent className="max-w-sm rounded-lg border-border bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Task?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this task? This action cannot be undone.
+              Tem certeza de que quer excluir esta tarefa? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="border-border bg-transparent">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-border bg-transparent">Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
@@ -677,7 +685,7 @@ function AllTasks() {
                 setPendingDeleteId(null);
               }}
             >
-              Delete
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

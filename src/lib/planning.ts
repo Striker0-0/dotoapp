@@ -60,7 +60,7 @@ export function planActions(
       const key = `study:${e.id}`;
       if (!handled.has(key) && !seen.has(key)) {
         seen.add(key);
-        out.push({ kind: "study", key, title: `Study: ${e.title}`, date: e.date, minutes });
+        out.push({ kind: "study", key, title: `Estudar: ${e.title}`, date: e.date, minutes });
       }
     }
   }
@@ -100,13 +100,13 @@ export function computeInsights(input: {
     out.push({
       id: "overdue",
       level: "warn",
-      text: `${overdue.length} overdue: ${names(overdue)}`,
+      text: `${overdue.length} ${overdue.length === 1 ? "atrasada" : "atrasadas"}: ${names(overdue)}`,
     });
   }
 
   for (const [offset, when] of [
-    [0, "today"],
-    [1, "tomorrow"],
+    [0, "hoje"],
+    [1, "amanhã"],
   ] as const) {
     const date = addDays(today, offset);
     const due = open.filter(
@@ -120,7 +120,7 @@ export function computeInsights(input: {
       out.push({
         id: `due-${offset}`,
         level: offset === 0 ? "warn" : "info",
-        text: `Due ${when}, not in My Day: ${names(due)}`,
+        text: `Vence ${when}, fora do Meu dia: ${names(due)}`,
       });
     }
   }
@@ -139,13 +139,13 @@ export function computeInsights(input: {
         out.push({
           id: `goal-${g.id}`,
           level: "warn",
-          text: `${g.title}: can't reach ${p.target} days this week (${p.days} so far, ${left} days left)`,
+          text: `${g.title}: não dá para chegar a ${p.target} dias nesta semana (${p.days} até agora, ${left} ${left === 1 ? "dia restante" : "dias restantes"})`,
         });
       } else if (need === left && need > 0) {
         out.push({
           id: `goal-${g.id}`,
           level: "warn",
-          text: `${g.title}: needs every remaining day this week (${need})`,
+          text: `${g.title}: precisa de todos os dias que restam da semana (${need})`,
         });
       }
     } else if (left <= 3) {
@@ -155,8 +155,8 @@ export function computeInsights(input: {
         level: left <= 1 ? "warn" : "info",
         text:
           left <= 0
-            ? `${g.title}: week ends with ${fmt(need)} to go`
-            : `${g.title}: ${fmt(need)} to go, ${fmt(need / left)} a day for ${left} ${left === 1 ? "day" : "days"}`,
+            ? `${g.title}: a semana termina com ${fmt(need)} faltando`
+            : `${g.title}: faltam ${fmt(need)}, ${fmt(need / left)} por dia por ${left} ${left === 1 ? "dia" : "dias"}`,
       });
     }
   }
@@ -168,7 +168,7 @@ export function computeInsights(input: {
     out.push({
       id: `exam-${e.id}`,
       level: n <= 1 ? "warn" : "info",
-      text: `${e.title} ${n === 0 ? "is today" : n === 1 ? "is tomorrow" : `in ${n} days`}`,
+      text: `${e.title} ${n === 0 ? "é hoje" : n === 1 ? "é amanhã" : `em ${n} dias`}`,
     });
   }
 
@@ -181,7 +181,7 @@ export function computeInsights(input: {
     out.push({
       id: "today-events",
       level: "info",
-      text: `Calendar today: ${shown}${todays.length > 3 ? ` +${todays.length - 3} more` : ""}`,
+      text: `Agenda de hoje: ${shown}${todays.length > 3 ? ` +${todays.length - 3}` : ""}`,
     });
   }
 

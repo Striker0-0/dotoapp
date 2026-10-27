@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CalendarSettings } from "@/components/CalendarSettings";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { MemoryPanel } from "@/components/MemoryPanel";
 import { Textarea } from "@/components/ui/textarea";
 import { useStore } from "@/lib/store";
@@ -79,7 +80,7 @@ function Bubble({ turn }: { turn: ChatTurn }) {
                 <img
                   key={i}
                   src={`data:${m.mimeType};base64,${m.data}`}
-                  alt="attachment"
+                  alt="anexo"
                   className="max-h-40 rounded-lg"
                 />
               ) : (
@@ -107,11 +108,11 @@ function ProposalCard({
 }) {
   return (
     <div className="rounded-2xl border border-border p-4">
-      <p className={label}>Gemini wants to change</p>
+      <p className={label}>O Gemini quer alterar</p>
 
       {proposal.myDay.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 text-xs text-muted-foreground">Add to My Day</p>
+          <p className="mb-1 text-xs text-muted-foreground">Adicionar ao Meu dia</p>
           <ul className="divide-y divide-border">
             {proposal.myDay.map((m) => (
               <li key={m.task.id} className="py-1.5 text-sm">
@@ -131,14 +132,14 @@ function ProposalCard({
 
       {proposal.newTasks.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 text-xs text-muted-foreground">New tasks</p>
+          <p className="mb-1 text-xs text-muted-foreground">Novas tarefas</p>
           <ul className="divide-y divide-border">
             {proposal.newTasks.map((t, i) => (
               <li key={i} className="py-1.5 text-sm">
                 {t.title}
                 <span className="ml-2 text-xs text-muted-foreground">
                   {t.recurrence} · {t.baseType}
-                  {t.expiresAt ? ` · due ${t.expiresAt}` : ""}
+                  {t.expiresAt ? ` · vence ${t.expiresAt}` : ""}
                   {t.plan ? " · + My Day" : ""}
                 </span>
               </li>
@@ -149,7 +150,7 @@ function ProposalCard({
 
       {proposal.complete.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 text-xs text-muted-foreground">Mark as completed</p>
+          <p className="mb-1 text-xs text-muted-foreground">Marcar como concluídas</p>
           <ul className="divide-y divide-border">
             {proposal.complete.map((t) => (
               <li key={t.id} className="py-1.5 text-sm">
@@ -162,7 +163,7 @@ function ProposalCard({
 
       {proposal.removeFromDay.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 text-xs text-muted-foreground">Take off My Day</p>
+          <p className="mb-1 text-xs text-muted-foreground">Tirar do Meu dia</p>
           <ul className="divide-y divide-border">
             {proposal.removeFromDay.map((x) => (
               <li key={x.task.id} className="py-1.5 text-sm">
@@ -175,17 +176,17 @@ function ProposalCard({
 
       {(proposal.memoryAdd.length > 0 || proposal.memoryRemove.length > 0) && (
         <div className="mb-3">
-          <p className="mb-1 text-xs text-muted-foreground">Memory</p>
+          <p className="mb-1 text-xs text-muted-foreground">Memória</p>
           <ul className="divide-y divide-border">
             {proposal.memoryAdd.map((n) => (
               <li key={`a-${n}`} className="py-1.5 text-sm">
-                <span className="mr-2 text-xs text-muted-foreground">Remember</span>
+                <span className="mr-2 text-xs text-muted-foreground">Lembrar</span>
                 {n}
               </li>
             ))}
             {proposal.memoryRemove.map((n) => (
               <li key={`r-${n}`} className="py-1.5 text-sm">
-                <span className="mr-2 text-xs text-destructive">Forget</span>
+                <span className="mr-2 text-xs text-destructive">Esquecer</span>
                 {n}
               </li>
             ))}
@@ -195,13 +196,13 @@ function ProposalCard({
 
       {proposal.setGoals.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 text-xs text-muted-foreground">Weekly goals</p>
+          <p className="mb-1 text-xs text-muted-foreground">Metas semanais</p>
           <ul className="divide-y divide-border">
             {proposal.setGoals.map((x) => (
               <li key={x.task.id} className="py-1.5 text-sm">
                 {x.task.title}
                 <span className="ml-2 text-xs text-muted-foreground">
-                  {x.goal ? goalLabel(x.goal, x.task.baseType) : "remove goal"}
+                  {x.goal ? goalLabel(x.goal, x.task.baseType) : "remover meta"}
                 </span>
               </li>
             ))}
@@ -212,7 +213,7 @@ function ProposalCard({
       {proposal.deleteTasks.length > 0 && (
         <div className="mb-3 rounded-lg border border-destructive/50 p-3">
           <p className="mb-1 text-xs font-medium text-destructive">
-            Delete permanently (no undo)
+            Excluir definitivamente (sem desfazer)
           </p>
           <ul className="divide-y divide-border">
             {proposal.deleteTasks.map((x) => (
@@ -220,8 +221,8 @@ function ProposalCard({
                 {x.task.title}
                 <span className="ml-2 text-xs text-muted-foreground">
                   {x.subtaskCount > 0
-                    ? `also deletes ${x.subtaskCount} subtask${x.subtaskCount > 1 ? "s" : ""} and history`
-                    : "and its history"}
+                    ? `também exclui ${x.subtaskCount} subtarefa${x.subtaskCount > 1 ? "s" : ""} e o histórico`
+                    : "e o histórico dela"}
                 </span>
               </li>
             ))}
@@ -236,10 +237,10 @@ function ProposalCard({
           className="flex-1"
         >
           <Check className="size-4" />{" "}
-          {proposal.deleteTasks.length > 0 ? "Apply and delete" : "Apply"}
+          {proposal.deleteTasks.length > 0 ? "Aplicar e excluir" : "Aplicar"}
         </Button>
         <Button variant="outline" onClick={onDiscard}>
-          <X className="size-4" /> Discard
+          <X className="size-4" /> Descartar
         </Button>
       </div>
     </div>
@@ -304,7 +305,7 @@ export function GeminiSync() {
     setHasKey(true);
     setEditingKey(false);
     setKeyOpen(false);
-    flash("API key saved on this device.");
+    flash("Chave da API salva neste aparelho.");
   };
 
   const onClearKey = async () => {
@@ -320,7 +321,7 @@ export function GeminiSync() {
 
   const onCopy = async () => {
     const ok = await copyText(JSON.stringify(buildPayload(globalTasks, dailyTasks, useStore.getState().memory), null, 2));
-    flash(ok ? "Tasks copied as JSON." : "Couldn't copy to the clipboard.");
+    flash(ok ? "Tarefas copiadas como JSON." : "Não consegui copiar.");
   };
 
   const onPickFiles = async (files: FileList | null) => {
@@ -328,12 +329,12 @@ export function GeminiSync() {
     setError("");
     const room = MAX_ATTACHMENTS - attachments.length;
     const chosen = Array.from(files).slice(0, Math.max(0, room));
-    if (files.length > chosen.length) flash(`Up to ${MAX_ATTACHMENTS} files per message.`);
+    if (files.length > chosen.length) flash(`Até ${MAX_ATTACHMENTS} arquivos por mensagem.`);
     try {
       const added = await Promise.all(chosen.map(fileToAttachment));
       setAttachments((prev) => [...prev, ...added]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't add that file.");
+      setError(e instanceof Error ? e.message : "Não consegui adicionar esse arquivo.");
     }
     if (fileInput.current) fileInput.current.value = "";
   };
@@ -380,7 +381,7 @@ export function GeminiSync() {
         }
         return;
       }
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : "Algo deu errado.");
       // Give the message back so nothing is lost.
       setDraft(text);
       setAttachments(sent);
@@ -411,7 +412,7 @@ export function GeminiSync() {
     proposal.removeFromDay.forEach((x) => s.removeDailyTask(x.dailyId));
     proposal.deleteTasks.forEach((x) => s.removeGlobalTask(x.task.id));
     setProposal(null);
-    flash("Applied. Check All Tasks and My Day.");
+    flash("Aplicado. Veja Tarefas e Meu dia.");
   };
 
   const onStop = () => abort.current?.abort();
@@ -440,9 +441,9 @@ export function GeminiSync() {
           className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left"
         >
           <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Gemini API key
+            Chave da API do Gemini
             <span className="ml-2 normal-case tracking-normal text-foreground">
-              {hasKey ? "Saved ✓" : "Not set"}
+              {hasKey ? "Salva ✓" : "Não definida"}
             </span>
           </span>
           <ChevronDown
@@ -467,14 +468,14 @@ export function GeminiSync() {
                       setConfirmRemove(false);
                     }}
                   >
-                    Change
+                    Alterar
                   </Button>
                   <Button
                     variant={confirmRemove ? "destructive" : "outline"}
                     size="sm"
                     onClick={() => (confirmRemove ? onClearKey() : setConfirmRemove(true))}
                   >
-                    {confirmRemove ? "Tap again to remove" : "Remove"}
+                    {confirmRemove ? "Toque de novo para remover" : "Remover"}
                   </Button>
                 </div>
               </>
@@ -488,7 +489,7 @@ export function GeminiSync() {
                   placeholder="AIza…"
                 />
                 <Button onClick={onSaveKey} disabled={!apiKey.trim()}>
-                  Save
+                  Salvar
                 </Button>
                 {editingKey && (
                   <Button
@@ -498,25 +499,26 @@ export function GeminiSync() {
                       setEditingKey(false);
                     }}
                   >
-                    Cancel
+                    Cancelar
                   </Button>
                 )}
               </div>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-              Stored only on this device. Messages, photos and your tasks go to Google.
+              Guardada só neste aparelho. Mensagens, fotos e suas tarefas são enviadas ao Google.
             </p>
           </div>
         )}
       </section>
 
       <CalendarSettings />
+      <NotificationSettings />
       <MemoryPanel />
 
       <section>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Chat</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Conversa</p>
             <div className="flex overflow-hidden rounded-full border border-border text-[11px]">
               {(["smart", "fast"] as const).map((v) => (
                 <button
@@ -528,24 +530,24 @@ export function GeminiSync() {
                   }}
                   title={
                     v === "fast"
-                      ? "Lighter model: quicker, less careful with photos and planning"
-                      : "Best answers, can be slower"
+                      ? "Modelo mais leve: mais rápido, menos cuidadoso com fotos e planejamento"
+                      : "Melhores respostas, pode ser mais lento"
                   }
-                  className={`px-2.5 py-1 capitalize ${
+                  className={`px-2.5 py-1 ${
                     speed === v ? "bg-foreground text-background" : "text-muted-foreground"
                   }`}
                 >
-                  {v}
+                  {v === "fast" ? "Rápido" : "Inteligente"}
                 </button>
               ))}
             </div>
           </div>
           <div className="flex gap-1">
-            <Button variant="ghost" size="sm" onClick={onCopy} aria-label="Copy tasks as JSON">
+            <Button variant="ghost" size="sm" onClick={onCopy} aria-label="Copiar tarefas como JSON">
               <Copy className="size-4" />
             </Button>
             {history.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={onNewChat} aria-label="New chat">
+              <Button variant="ghost" size="sm" onClick={onNewChat} aria-label="Nova conversa">
                 <Trash2 className="size-4" />
               </Button>
             )}
@@ -555,8 +557,8 @@ export function GeminiSync() {
         <div className="space-y-3">
           {history.length === 0 && !busy && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Ask anything. Send a photo of a list or a PDF. Say &ldquo;plan my day&rdquo; and
-              Gemini suggests changes you can approve.
+              Pergunte qualquer coisa. Envie a foto de uma lista ou um PDF. Diga &ldquo;planeje meu
+              dia&rdquo; e o Gemini sugere mudanças que você pode aprovar.
             </p>
           )}
           {history.map((turn, i) => (
@@ -564,14 +566,14 @@ export function GeminiSync() {
           ))}
           {busy && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Thinking… {elapsed}s
+              <Loader2 className="size-4 animate-spin" /> Pensando… {elapsed}s
               {status ? ` · ${status}` : ""}
             </div>
           )}
           {meta && !busy && (
             <p className="text-[11px] text-muted-foreground">
               {meta.model} · {(meta.ms / 1000).toFixed(1)}s
-              {meta.calls > 1 ? ` · ${meta.calls} steps` : ""}
+              {meta.calls > 1 ? ` · ${meta.calls} etapas` : ""}
             </p>
           )}
           {proposal && !busy && (
@@ -605,7 +607,7 @@ export function GeminiSync() {
                 <button
                   onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
                   className="absolute -right-1.5 -top-1.5 rounded-full bg-foreground p-0.5 text-background"
-                  aria-label="Remove attachment"
+                  aria-label="Remover anexo"
                 >
                   <X className="size-3" />
                 </button>
@@ -628,19 +630,19 @@ export function GeminiSync() {
             size="icon"
             onClick={() => fileInput.current?.click()}
             disabled={busy || attachments.length >= MAX_ATTACHMENTS}
-            aria-label="Attach image or PDF"
+            aria-label="Anexar imagem ou PDF"
           >
             <Paperclip className="size-4" />
           </Button>
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Message Gemini"
+            placeholder="Mensagem para o Gemini"
             rows={1}
             className="min-h-10 flex-1 resize-none"
           />
           {busy ? (
-            <Button size="icon" variant="outline" onClick={onStop} aria-label="Stop">
+            <Button size="icon" variant="outline" onClick={onStop} aria-label="Parar">
               <Square className="size-4" />
             </Button>
           ) : (
@@ -648,7 +650,7 @@ export function GeminiSync() {
               size="icon"
               onClick={onSend}
               disabled={!apiKey.trim() || (!draft.trim() && attachments.length === 0)}
-              aria-label="Send"
+              aria-label="Enviar"
             >
               <Send className="size-4" />
             </Button>
