@@ -13,15 +13,15 @@ import { useEffect, useRef, useState } from "react";
 export const Route = createFileRoute("/my-day")({
   head: () => ({
     meta: [
-      { title: "My Day · Slate" },
+      { title: "Meu dia · Slate" },
       {
         name: "description",
-        content: "Today's plan only. Everything clears at 4 AM for a blank slate.",
+        content: "Só o plano de hoje. Tudo é limpo às 4h para começar do zero.",
       },
-      { property: "og:title", content: "My Day · Slate" },
+      { property: "og:title", content: "Meu dia · Slate" },
       {
         property: "og:description",
-        content: "Today's plan only. Everything clears at 4 AM for a blank slate.",
+        content: "Só o plano de hoje. Tudo é limpo às 4h para começar do zero.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -35,7 +35,7 @@ const numberField =
 
 function DailyRow({ task }: { task: DailyTask }) {
   const title = useStore(
-    (s) => s.globalTasks.find((g) => g.id === task.globalTaskId)?.title ?? "Task",
+    (s) => s.globalTasks.find((g) => g.id === task.globalTaskId)?.title ?? "Tarefa",
   );
   const { setDailyProgress, toggleDailyDone, removeDailyTask, startTimer, stopTimer } = useStore();
 
@@ -112,7 +112,7 @@ function DailyRow({ task }: { task: DailyTask }) {
         {task.trackingType === "Simple" ? (
           <button
             onClick={() => toggleDailyDone(task.id)}
-            aria-label="Toggle done"
+            aria-label="Marcar como feito"
             className={`grid size-7 shrink-0 place-items-center rounded-lg border transition-all ${
               done ? "border-foreground bg-foreground text-background" : "border-border"
             }`}
@@ -121,7 +121,7 @@ function DailyRow({ task }: { task: DailyTask }) {
           </button>
         ) : (
           <div
-            aria-label={`${pct}% complete`}
+            aria-label={`${pct}% concluído`}
             className={`grid size-8 shrink-0 place-items-center rounded-full border text-[10px] tabular-nums ${
               done ? "border-foreground bg-foreground text-background" : "border-border"
             }`}
@@ -138,7 +138,7 @@ function DailyRow({ task }: { task: DailyTask }) {
           <Button
             size="icon"
             variant={running ? "default" : "outline"}
-            aria-label={running ? "Pause stopwatch" : "Start stopwatch"}
+            aria-label={running ? "Pausar cronômetro" : "Iniciar cronômetro"}
             className="size-8 shrink-0 rounded-full"
             onClick={() => (running ? stopTimer(task.id) : startTimer(task.id))}
           >
@@ -148,7 +148,7 @@ function DailyRow({ task }: { task: DailyTask }) {
 
         <button
           onClick={() => removeDailyTask(task.id)}
-          aria-label="Remove"
+          aria-label="Remover"
           className="opacity-0 transition-opacity group-hover:opacity-100"
         >
           <X className="size-3.5 text-muted-foreground" />
@@ -170,7 +170,7 @@ function DailyRow({ task }: { task: DailyTask }) {
             </span>
             <div className="flex items-center gap-1.5">
               <Input
-                aria-label="Hours logged"
+                aria-label="Horas registradas"
                 inputMode="numeric"
                 min="0"
                 type="number"
@@ -180,7 +180,7 @@ function DailyRow({ task }: { task: DailyTask }) {
                 className={`${numberField} w-14`}
               />
               <Input
-                aria-label="Minutes logged"
+                aria-label="Minutos registrados"
                 inputMode="numeric"
                 min="0"
                 type="number"
@@ -197,11 +197,11 @@ function DailyRow({ task }: { task: DailyTask }) {
       {task.trackingType === "Count" && (
         <div className="mt-3 flex items-center gap-2 pl-11">
           <Input
-            aria-label="Count logged"
+            aria-label="Contagem registrada"
             inputMode="numeric"
             min="0"
             type="number"
-            placeholder="Count"
+            placeholder="Qtd."
             value={count}
             onChange={(e) => onCount(e.target.value)}
             className={`${numberField} w-24`}
@@ -233,9 +233,9 @@ function MyDay() {
   return (
     <div className="mx-auto min-h-screen max-w-md px-6 pb-28 pt-12">
       <header className="mb-8">
-        <h1 className="text-[28px] font-medium tracking-tight">My Day</h1>
+        <h1 className="text-[28px] font-medium tracking-tight">Meu dia</h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          {new Date().toLocaleDateString("pt-BR", { weekday: "long", month: "long", day: "numeric" })}
         </p>
       </header>
 
@@ -243,13 +243,13 @@ function MyDay() {
 
       {dailyTasks.length === 0 ? (
         <p className="mt-24 text-center text-sm text-muted-foreground">
-          A blank slate. Hold a task in All Tasks to plan today.
+          Dia em branco. Segure uma tarefa em Tarefas para planejar hoje.
         </p>
       ) : (
         <>
           <section className="mb-10">
             <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Doing
+              Fazendo
             </p>
             <ul>
               <AnimatePresence initial={false}>
@@ -259,14 +259,14 @@ function MyDay() {
               </AnimatePresence>
             </ul>
             {doing.length === 0 && (
-              <p className="py-4 text-sm text-muted-foreground">All done for today.</p>
+              <p className="py-4 text-sm text-muted-foreground">Tudo feito por hoje.</p>
             )}
           </section>
 
           {done.length > 0 && (
             <section>
               <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Done
+                Feito
               </p>
               <ul>
                 <AnimatePresence initial={false}>

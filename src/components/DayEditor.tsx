@@ -19,7 +19,7 @@ export function DayEditor({ task, date }: { task: GlobalTask; date: string }) {
 
   useEffect(() => setValue(String(Math.round(current))), [current, date]);
 
-  const label = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+  const label = new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -31,12 +31,12 @@ export function DayEditor({ task, date }: { task: GlobalTask; date: string }) {
       <p className="text-xs text-muted-foreground">
         {label}
         <span className="ml-2 text-foreground">
-          {current > 0 ? formatAmount(task.baseType, current) : "nothing logged"}
+          {current > 0 ? formatAmount(task.baseType, current) : "nada registrado"}
         </span>
       </p>
 
       {isToday ? (
-        <p className="mt-2 text-xs text-muted-foreground">Today is edited from My Day.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Hoje é editado em Meu dia.</p>
       ) : task.baseType === "Simple" ? (
         <div className="mt-2 flex gap-2">
           <Button
@@ -44,7 +44,7 @@ export function DayEditor({ task, date }: { task: GlobalTask; date: string }) {
             variant={current > 0 ? "outline" : "default"}
             onClick={() => setHistoryForDay(task.id, toStoreKey(date), current > 0 ? 0 : 1)}
           >
-            <Check className="size-4" /> {current > 0 ? "Mark not done" : "Mark done"}
+            <Check className="size-4" /> {current > 0 ? "Desmarcar" : "Marcar como feito"}
           </Button>
         </div>
       ) : (
@@ -53,7 +53,7 @@ export function DayEditor({ task, date }: { task: GlobalTask; date: string }) {
             type="number"
             min="0"
             inputMode="numeric"
-            aria-label={`Amount for ${date}`}
+            aria-label={`Quantidade em ${date}`}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             className={field}
@@ -69,13 +69,13 @@ export function DayEditor({ task, date }: { task: GlobalTask; date: string }) {
               )
             }
           >
-            Save
+            Salvar
           </Button>
           {current > 0 && (
             <button
               type="button"
               onClick={() => setHistoryForDay(task.id, toStoreKey(date), 0)}
-              aria-label="Clear this day"
+              aria-label="Limpar este dia"
               className="text-muted-foreground/70 hover:text-foreground"
             >
               <Trash2 className="size-4" />

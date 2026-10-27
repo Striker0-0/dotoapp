@@ -19,14 +19,14 @@ export function GoalPicker({
   const canAmount = baseType !== "Simple";
   // An amount goal means nothing for a Simple task.
   const goal = value?.kind === "amount" && !canAmount ? null : value;
-  const unit = baseType === "Time" ? "min" : "reps";
+  const unit = baseType === "Time" ? "min" : "rep.";
 
   return (
     <div>
-      <p className="mb-1.5 text-xs text-muted-foreground">Weekly goal (optional)</p>
+      <p className="mb-1.5 text-xs text-muted-foreground">Meta semanal (opcional)</p>
       <div className="flex flex-wrap gap-1.5">
         <button type="button" className={chip(goal === null)} onClick={() => onChange(null)}>
-          None
+          Nenhuma
         </button>
         <button
           type="button"
@@ -35,7 +35,7 @@ export function GoalPicker({
             onChange({ kind: "days", target: goal?.kind === "days" ? goal.target : 5 })
           }
         >
-          Days per week
+          Dias por semana
         </button>
         {canAmount && (
           <button
@@ -48,7 +48,7 @@ export function GoalPicker({
               })
             }
           >
-            {baseType === "Time" ? "Time per week" : "Reps per week"}
+            {baseType === "Time" ? "Tempo por semana" : "Repetições por semana"}
           </button>
         )}
       </div>
@@ -62,7 +62,7 @@ export function GoalPicker({
               className={chip(goal.target === n)}
               onClick={() => onChange({ kind: "days", target: n })}
             >
-              {n === 7 ? "Every day" : n}
+              {n === 7 ? "Todos os dias" : n}
             </button>
           ))}
         </div>
@@ -74,7 +74,7 @@ export function GoalPicker({
             type="number"
             min="1"
             inputMode="numeric"
-            aria-label={`Weekly goal in ${unit}`}
+            aria-label={`Meta semanal em ${unit}`}
             value={goal.target ? String(goal.target) : ""}
             onChange={(e) =>
               onChange({ kind: "amount", target: Math.max(0, Math.round(Number(e.target.value) || 0)) })
@@ -82,7 +82,7 @@ export function GoalPicker({
             className="h-8 w-28 px-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield]"
           />
           <span className="text-xs text-muted-foreground">
-            {unit} a week
+            {unit} por semana
             {baseType === "Time" && goal.target > 0 ? ` (${formatMinutes(goal.target)})` : ""}
           </span>
         </div>

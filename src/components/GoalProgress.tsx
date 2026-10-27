@@ -11,7 +11,7 @@ export function GoalProgress({ task, weeks = 6 }: { task: GlobalTask; weeks?: nu
     <div className="rounded-lg border border-border p-3">
       <div className="flex items-baseline justify-between">
         <p className="text-xs text-muted-foreground">
-          Goal: {goalLabel(task.weeklyGoal, task.baseType)}
+          Meta: {goalLabel(task.weeklyGoal, task.baseType)}
         </p>
         <p className="text-xs tabular-nums">
           {progressLabel(task, now)}
@@ -25,7 +25,7 @@ export function GoalProgress({ task, weeks = 6 }: { task: GlobalTask; weeks?: nu
         />
       </div>
       <div className="mt-3 flex items-center gap-1.5">
-        <span className="mr-1 text-[10px] text-muted-foreground">Last {weeks} weeks</span>
+        <span className="mr-1 text-[10px] text-muted-foreground">Últimas {weeks} semanas</span>
         {past.map((w) => (
           <span
             key={w.start}

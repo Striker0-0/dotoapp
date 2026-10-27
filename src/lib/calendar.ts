@@ -1,3 +1,4 @@
+import { queryDeviceEvents, type RawDeviceEvent } from "@/lib/deviceCalendar";
 import { ymd } from "@/lib/stats";
 
 /**
@@ -20,6 +21,8 @@ const URL_KEY = "doto_calendar_url";
 const FILE_KEY = "doto_calendar_file";
 const FILE_NAME_KEY = "doto_calendar_file_name";
 const CACHE_KEY = "doto_calendar_cache";
+const DEVICE_KEY = "doto_calendar_device";
+const DEVICE_CACHE_KEY = "doto_calendar_device_cache";
 const CACHE_MS = 3 * 60 * 60 * 1000;
 export const CALENDAR_EVENT = "doto-calendar-updated";
 
@@ -50,9 +53,13 @@ const notify = () => {
 
 export const getCalendarUrl = () => store()?.getItem(URL_KEY) ?? "";
 export const getCalendarFileName = () => store()?.getItem(FILE_NAME_KEY) ?? "";
-export const hasCalendar = () => Boolean(getCalendarUrl() || store()?.getItem(FILE_KEY));
+export const hasDeviceCalendar = () => store()?.getItem(DEVICE_KEY) != null;
+export const hasCalendar = () =>
+  Boolean(getCalendarUrl() || store()?.getItem(FILE_KEY) || hasDeviceCalendar());
 
 export function saveCalendarUrl(url: string) {
+  store()?.removeItem(DEVICE_KEY);
+  store()?.removeItem(DEVICE_CACHE_KEY);
   store()?.removeItem(FILE_KEY);
   store()?.removeItem(FILE_NAME_KEY);
   store()?.removeItem(CACHE_KEY);
@@ -63,6 +70,8 @@ export function saveCalendarUrl(url: string) {
 /** Returns false if the file is not a calendar or does not fit in storage. */
 export function saveCalendarFile(name: string, text: string): boolean {
   if (!text.includes("BEGIN:VCALENDAR")) return false;
+  store()?.removeItem(DEVICE_KEY);
+  store()?.removeItem(DEVICE_CACHE_KEY);
   store()?.removeItem(URL_KEY);
   store()?.removeItem(CACHE_KEY);
   if (!put(FILE_KEY, text)) return false;
@@ -72,7 +81,9 @@ export function saveCalendarFile(name: string, text: string): boolean {
 }
 
 export function clearCalendar() {
-  for (const k of [URL_KEY, FILE_KEY, FILE_NAME_KEY, CACHE_KEY]) store()?.removeItem(k);
+  for (const k of [URL_KEY, FILE_KEY, FILE_NAME_KEY, CACHE_KEY, DEVICE_KEY, DEVICE_CACHE_KEY]) {
+    store()?.removeItem(k);
+  }
   notify();
 }
 
@@ -98,17 +109,17 @@ async function httpGet(url: string, signal?: AbortSignal): Promise<string> {
     .Capacitor?.Plugins?.CapacitorHttp;
   if (native?.get) {
     const res = await native.get({ url, responseType: "text" });
-    if (res.status >= 400) throw new Error(`Calendar request failed (${res.status}).`);
+    if (res.status >= 400) throw new Error(`Falha ao carregar a agenda (${res.status}).`);
     return typeof res.data === "string" ? res.data : String(res.data ?? "");
   }
   try {
     const res = await fetch(url, signal ? { signal } : {});
-    if (!res.ok) throw new Error(`Calendar request failed (${res.status}).`);
+    if (!res.ok) throw new Error(`Falha ao carregar a agenda (${res.status}).`);
     return await res.text();
   } catch (e) {
     if (e instanceof TypeError) {
       throw new Error(
-        "Couldn't load the calendar link (blocked by the browser). Upload the .ics file instead.",
+        "Não foi possível abrir o link da agenda (bloqueado pelo navegador). Envie o arquivo .ics.",
       );
     }
     throw e;
@@ -123,7 +134,7 @@ export async function loadCalendarText(force = false, signal?: AbortSignal): Pro
   const file = store()?.getItem(FILE_KEY);
   if (file) return file;
   const url = getCalendarUrl();
-  if (!url) throw new Error("No calendar linked.");
+  if (!url) throw new Error("Nenhuma agenda conectada.");
 
   let stale = "";
   try {
@@ -140,10 +151,10 @@ export async function loadCalendarText(force = false, signal?: AbortSignal): Pro
   try {
     const clean = url.replace(/^webcal:/i, "https:");
     if (!/^https:\/\//i.test(clean)) {
-      throw new Error("The calendar address must start with https:// or webcal://");
+      throw new Error("O endereço da agenda deve começar com https:// ou webcal://");
     }
     const text = await httpGet(clean, signal);
-    if (!text.includes("BEGIN:VCALENDAR")) throw new Error("That address did not return a calendar.");
+    if (!text.includes("BEGIN:VCALENDAR")) throw new Error("Esse endereço não devolveu uma agenda.");
     put(CACHE_KEY, JSON.stringify({ at: Date.now(), text }));
     notify();
     return text;
@@ -313,7 +324,7 @@ function readEvents(text: string): RawEvent[] {
         const ridDate = rid ? parseDate(rid.value, rid.params["VALUE"] === "DATE") : null;
         events.push({
           uid: get("UID")?.value ?? `${events.length}`,
-          title: unescapeText(get("SUMMARY")?.value ?? "(no title)") || "(no title)",
+          title: unescapeText(get("SUMMARY")?.value ?? "(sem título)") || "(sem título)",
           start: parsed.date,
           end: end?.date ?? null,
           allDay: parsed.allDay,
@@ -387,5 +398,127 @@ export function parseIcs(text: string, fromDate: string, toDate: string): Calend
 
 export const timeLabel = (e: CalendarEvent) =>
   e.allDay
-    ? "all day"
+    ? "dia todo"
     : `${String(e.start.getHours()).padStart(2, "0")}:${String(e.start.getMinutes()).padStart(2, "0")}`;
+
+// ---- Calendar on the phone (Android calendar provider) ---------------------
+
+/** Which calendars of the phone to use. null = all of them. */
+export function getDeviceSelection(): string[] | null {
+  try {
+    const raw = store()?.getItem(DEVICE_KEY);
+    const ids = raw ? (JSON.parse(raw) as { ids?: string[] | null }).ids : null;
+    return Array.isArray(ids) ? ids : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveDeviceSource(ids: string[] | null) {
+  store()?.removeItem(URL_KEY);
+  store()?.removeItem(FILE_KEY);
+  store()?.removeItem(FILE_NAME_KEY);
+  store()?.removeItem(CACHE_KEY);
+  store()?.removeItem(DEVICE_CACHE_KEY);
+  put(DEVICE_KEY, JSON.stringify({ ids }));
+  notify();
+}
+
+/**
+ * Android stores all-day events as midnight UTC of the day, so the date comes from
+ * the UTC parts; timed events use the local time.
+ */
+export function mapDeviceEvents(raw: RawDeviceEvent[]): CalendarEvent[] {
+  const out: CalendarEvent[] = [];
+  for (const r of raw) {
+    if (typeof r.startDate !== "number" || !Number.isFinite(r.startDate)) continue;
+    const allDay = Boolean(r.isAllDay);
+    const s = new Date(r.startDate);
+    const start = allDay ? new Date(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()) : s;
+    const date = ymd(start);
+    out.push({
+      id: `${r.id}|${date}`,
+      title: (r.title ?? "").trim() || "(sem título)",
+      start,
+      end: allDay || typeof r.endDate !== "number" ? null : new Date(r.endDate),
+      allDay,
+      date,
+    });
+  }
+  return out.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+interface StoredEvent {
+  id: string;
+  title: string;
+  s: number;
+  e: number | null;
+  allDay: boolean;
+  date: string;
+}
+
+function rememberDeviceEvents(events: CalendarEvent[]) {
+  const list: StoredEvent[] = events.slice(0, 300).map((e) => ({
+    id: e.id,
+    title: e.title,
+    s: e.start.getTime(),
+    e: e.end ? e.end.getTime() : null,
+    allDay: e.allDay,
+    date: e.date,
+  }));
+  put(DEVICE_CACHE_KEY, JSON.stringify({ at: Date.now(), events: list }));
+  notify();
+}
+
+function cachedDeviceEvents(from: string, to: string): CalendarEvent[] {
+  try {
+    const raw = store()?.getItem(DEVICE_CACHE_KEY);
+    if (!raw) return [];
+    const list = (JSON.parse(raw) as { events?: StoredEvent[] }).events ?? [];
+    return list
+      .filter((e) => e.date >= from && e.date <= to)
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        start: new Date(e.s),
+        end: e.e === null ? null : new Date(e.e),
+        allDay: e.allDay,
+        date: e.date,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Events between two local dates (YYYY-MM-DD) from whichever source is linked.
+ * `remember` keeps the result for the screens that read without waiting.
+ */
+export async function loadEvents(
+  from: string,
+  to: string,
+  opts: { force?: boolean; remember?: boolean; signal?: AbortSignal } = {},
+): Promise<CalendarEvent[]> {
+  if (hasDeviceCalendar()) {
+    const selected = getDeviceSelection();
+    const raw = await queryDeviceEvents(from, to);
+    const events = mapDeviceEvents(
+      selected ? raw.filter((r) => r.calendarId != null && selected.includes(r.calendarId)) : raw,
+    );
+    if (opts.remember) rememberDeviceEvents(events);
+    return events;
+  }
+  return parseIcs(await loadCalendarText(opts.force ?? false, opts.signal), from, to);
+}
+
+/** Same as loadEvents but only from what is already saved: instant, no network. */
+export function cachedEvents(from: string, to: string): CalendarEvent[] {
+  if (hasDeviceCalendar()) return cachedDeviceEvents(from, to);
+  const text = cachedCalendarText();
+  if (!text) return [];
+  try {
+    return parseIcs(text, from, to);
+  } catch {
+    return [];
+  }
+}

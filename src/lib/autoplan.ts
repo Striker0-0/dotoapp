@@ -1,5 +1,5 @@
 import { addDays, todayYmd } from "@/lib/stats";
-import { hasCalendar, loadCalendarText, parseIcs } from "@/lib/calendar";
+import { hasCalendar, loadEvents } from "@/lib/calendar";
 import { planActions } from "@/lib/planning";
 import { useStore } from "@/lib/store";
 
@@ -34,15 +34,13 @@ async function doRun(force: boolean): Promise<AutoPlanResult> {
 
   if (!hasCalendar()) return none;
 
-  let text: string;
-  try {
-    text = await loadCalendarText(force);
-  } catch (e) {
-    return { ...none, error: e instanceof Error ? e.message : "Couldn't read the calendar." };
-  }
-
   const today = todayYmd();
-  const events = parseIcs(text, today, addDays(today, 14));
+  let events;
+  try {
+    events = await loadEvents(today, addDays(today, 14), { force, remember: true });
+  } catch (e) {
+    return { ...none, error: e instanceof Error ? e.message : "Não foi possível ler a agenda." };
+  }
   const state = useStore.getState();
   const actions = planActions(events, today, state.autoplan, new Set(state.autoHandled));
 

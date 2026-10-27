@@ -43,7 +43,7 @@ export function Heatmap({
           const d = parseYmd(monday);
           return (
             <span key={monday} className="overflow-visible whitespace-nowrap text-[9px] text-muted-foreground">
-              {d.getDate() <= 7 ? d.toLocaleDateString(undefined, { month: "short" }) : ""}
+              {d.getDate() <= 7 ? d.toLocaleDateString("pt-BR", { month: "short" }) : ""}
             </span>
           );
         })}
@@ -65,7 +65,7 @@ export function Heatmap({
                 key={date}
                 type="button"
                 onClick={() => onSelect?.(date)}
-                aria-label={`${date}: ${v > 0 ? format(v) : "nothing"}`}
+                aria-label={`${date}: ${v > 0 ? format(v) : "nada"}`}
                 className={`aspect-square rounded-[3px] ${LEVELS[level(v, max)]} ${
                   isSelected
                     ? "outline outline-2 outline-offset-1 outline-foreground"
@@ -80,11 +80,11 @@ export function Heatmap({
       </div>
 
       <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
-        Less
+        Menos
         {LEVELS.map((c) => (
           <span key={c} className={`size-2.5 rounded-[2px] ${c}`} />
         ))}
-        More
+        Mais
       </div>
     </div>
   );

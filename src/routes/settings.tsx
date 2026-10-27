@@ -5,8 +5,8 @@ import { GeminiSync } from "@/components/GeminiSync";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings · Slate" },
-      { name: "description", content: "Connect Gemini to plan your day." },
+      { title: "Ajustes · Slate" },
+      { name: "description", content: "Conecte o Gemini para planejar seu dia." },
     ],
   }),
   component: Settings,
@@ -18,7 +18,7 @@ function Settings() {
       <header className="mb-8">
         <h1 className="text-[28px] font-medium tracking-tight">Gemini</h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          Chat, send photos or PDFs, and let Gemini plan your tasks. Nothing changes until you tap Apply.
+          Converse, envie fotos ou PDFs e deixe o Gemini planejar suas tarefas. Nada muda até você tocar em Aplicar.
         </p>
       </header>
       <GeminiSync />

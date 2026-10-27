@@ -89,13 +89,13 @@ export function weekBounds(offset = 0): { start: string; end: string } {
 }
 
 export function unitFor(baseType: TrackingType): string {
-  return baseType === "Time" ? "min" : baseType === "Count" ? "reps" : "done";
+  return baseType === "Time" ? "min" : baseType === "Count" ? "reps" : "feito";
 }
 
 export function formatAmount(baseType: TrackingType, n: number): string {
   if (baseType === "Time") return formatMinutes(n);
   if (baseType === "Count") return `${Math.round(n)} reps`;
-  return n >= 1 ? "done" : "";
+  return n >= 1 ? "feito" : "";
 }
 
 /** Drops goals that make no sense for the task type. */
@@ -110,9 +110,11 @@ export function cleanGoal(goal: WeeklyGoal | null, baseType: TrackingType): Week
 
 export function goalLabel(goal: WeeklyGoal, baseType: TrackingType): string {
   if (goal.kind === "days") {
-    return goal.target >= 7 ? "every day" : `${goal.target} ${goal.target === 1 ? "day" : "days"} a week`;
+    return goal.target >= 7
+      ? "todos os dias"
+      : `${goal.target} ${goal.target === 1 ? "dia" : "dias"} por semana`;
   }
-  return `${formatAmount(baseType, goal.target)} a week`;
+  return `${formatAmount(baseType, goal.target)} por semana`;
 }
 
 export interface WeekProgress {
@@ -149,7 +151,7 @@ export function weekProgress(task: GlobalTask, offset = 0): WeekProgress {
 
 export function progressLabel(task: GlobalTask, p: WeekProgress): string {
   if (!p.goal) return "";
-  if (p.goal.kind === "days") return `${p.days}/${p.goal.target} days`;
+  if (p.goal.kind === "days") return `${p.days}/${p.goal.target} ${p.goal.target === 1 ? "dia" : "dias"}`;
   if (task.baseType === "Time") {
     return `${formatMinutes(p.amount)} / ${formatMinutes(p.goal.target)}`;
   }

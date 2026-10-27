@@ -2,9 +2,9 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Activity, ListTodo, Sparkles, Sun } from "lucide-react";
 
 const tabs = [
-  { to: "/", label: "All Tasks", Icon: ListTodo },
-  { to: "/my-day", label: "My Day", Icon: Sun },
-  { to: "/stats", label: "Stats", Icon: Activity },
+  { to: "/", label: "Tarefas", Icon: ListTodo },
+  { to: "/my-day", label: "Meu dia", Icon: Sun },
+  { to: "/stats", label: "Estatísticas", Icon: Activity },
   { to: "/settings", label: "Gemini", Icon: Sparkles },
 ] as const;
 
