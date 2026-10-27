@@ -5,7 +5,6 @@ import { BottomNav } from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDailyReset } from "@/components/useDailyReset";
-import { Insights } from "@/components/Insights";
 import { useHydrated } from "@/components/useHydrated";
 import { formatMinutes, useStore, type DailyTask } from "@/lib/store";
 import { useEffect, useRef, useState } from "react";
@@ -238,8 +237,6 @@ function MyDay() {
           {new Date().toLocaleDateString("pt-BR", { weekday: "long", month: "long", day: "numeric" })}
         </p>
       </header>
-
-      <Insights />
 
       {dailyTasks.length === 0 ? (
         <p className="mt-24 text-center text-sm text-muted-foreground">
